@@ -181,7 +181,7 @@ function dueList(){const t=today(),out=[];for(const g of S.groups){const nw=next
 /* ---------- views ---------- */
 function stats(){const lambs=S.groups.reduce((a,g)=>a+(g.count||0),0),meal=S.groups.reduce((a,g)=>a+(g.meal||0),0),nx=dueList()[0],sn=stockNow(),u=usage(),yr=today().slice(0,4);
  const sold=S.log.filter(e=>e.type==='sale'&&e.date.startsWith(yr)).reduce((a,e)=>a+(e.n||0),0);
- const ml=sn!=null&&u?[Math.floor(sn/u)+' days','meal left in bin']:[meal>=1000?r1(meal/1000)+' t':meal+' kg','meal per week'];
+ const ml=sn!=null?[(sn>=1000?r1(sn/1000)+' t':Math.round(sn)+' kg'),'meal in bin'+(u?' · '+Math.floor(sn/u)+' days left':'')]:[meal>=1000?r1(meal/1000)+' t':meal+' kg','meal per week'];
  $('stats').innerHTML=[[lambs,'lambs on farm'],ml,[sold,'sold in '+yr],[nx?fmt(nx.d):'—',nx?'next: '+esc(nx.txt):'nothing due']].map(([b,t])=>`<div class="stat"><b>${b}</b><span>${t}</span></div>`).join('')}
 const job=x=>{const n=days(today(),x.d);const late=n<0&&!x.wd;return `<li class="${late?'late':''}"><div class="when">${fmt(x.d)}<small>${late?'overdue':rel(n)}</small></div><div><b>${esc(x.txt)}</b><div class="sm mute">${esc(x.sub)}</div></div></li>`};
 function card(g){const e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf(g.id,'dose');
