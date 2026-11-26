@@ -32,7 +32,7 @@ h1{font-size:clamp(36px,7vw,50px);margin:0}
 .stat b{display:block;font-size:30px;color:var(--tag);white-space:nowrap}
 .stat span{font-size:13px;opacity:.85}
 .tabs{display:flex;gap:2px;overflow-x:auto}
-.tabs button{flex:none;background:none;border:0;color:#fff;opacity:.75;font:600 16px Barlow,sans-serif;padding:10px 14px;min-height:46px;border-bottom:3px solid transparent;cursor:pointer}
+.tabs button{flex:none;background:none;border:0;color:#fff;opacity:.75;font:600 16px Barlow,sans-serif;padding:10px 9px;min-height:46px;border-bottom:3px solid transparent;cursor:pointer}
 .tabs button.on{opacity:1;border-color:var(--tag)}
 main{padding-top:6px;padding-bottom:70px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:24px 0 12px}
@@ -75,6 +75,12 @@ summary{cursor:pointer;font-weight:600;padding:10px 0;min-height:44px}
 .pd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .pd input{width:auto}
 .hit td{font-weight:700;color:var(--bar)}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.sum div{background:var(--soft);border-radius:10px;padding:10px 12px}
+.sum b{display:block;font:700 26px/1.1 'Barlow Condensed',Barlow,sans-serif}.sum span{font-size:13px;color:var(--mute)}
+.scanbox{display:grid;gap:6px;background:var(--soft);border-radius:12px;padding:12px}
+.scanbox .btn{display:inline-grid;place-items:center;justify-self:start}
+.filled{outline:2px solid var(--bar);outline-offset:1px}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:10}
 .sh{background:var(--card);width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:0 18px max(22px,env(safe-area-inset-bottom))}
 @media(min-width:700px){.ov{align-items:center}.sh{border-radius:18px}}
@@ -105,19 +111,20 @@ table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:9px 6px;b
 .hist li{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)}
 .hist .x{width:40px;height:40px;font-size:20px}
 @media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.big{font-size:40px}}
+@media(max-width:600px){.stack thead,.stack tfoot td:empty{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:9em;text-align:start!important;white-space:normal}.stack td::before{content:attr(data-l);float:inline-start;width:8.5em;margin-inline-start:-9em;color:var(--mute);font-weight:400}.stack td:first-child{font-weight:700}.stack td:first-child::before{content:none}.stack td:first-child{padding-inline-start:0}.stack td:empty{display:none}}
 @media(prefers-reduced-motion:no-preference){.bar i{transition:width .5s}}
-</style></head><body>
+</style><script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script></head><body>
 <header class="top"><div class="wrap">
  <div class="brand"><h1>Lamb tracker</h1><span class="sync">Saved on this phone</span></div>
  <div class="stats" id="stats"></div>
- <nav class="tabs" id="tabs"><button data-t="flock" class="on">Groups</button><button data-t="doses">Doses</button><button data-t="more">Meal &amp; backup</button></nav>
+ <nav class="tabs" id="tabs"><button data-t="flock" class="on">Groups</button><button data-t="doses">Doses</button><button data-t="sales">Sales</button><button data-t="more">Meal &amp; backup</button></nav>
 </div></header>
 <main class="wrap" id="view"></main>
 <div id="ov" class="ov" hidden><div class="sh" role="dialog" aria-modal="true" aria-labelledby="sht"><div class="shh"><h2 id="sht"></h2><button class="x" id="shx" aria-label="Close">×</button></div><div id="shb"></div></div></div>
 <div id="toast" class="toast" hidden></div>
 <script>{
 const KEY='lambtracker.v1';
-const blank=()=>({groups:[],products:[],log:[],set:{price:0},updated:0});
+const blank=()=>({groups:[],products:[],log:[],deliv:[],set:{price:0,lead:7},updated:0});
 let S=blank(),tab='flock';
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(blank(),JSON.parse(r))}catch(e){}
 const $=id=>document.getElementById(id);
@@ -154,17 +161,28 @@ function recompute(g){const w=lastOf(g.id,'weigh');g.avg=w?w.avg:0;g.min=w&&w.mi
 function doseMl(p,w){if(!(p.per>0))return p.rate||0;if(!w)return 0;return Math.ceil(w*p.rate/p.per*2)/2}
 function withdrawal(g){let out=null;const t=today();for(const p of S.products){if(!(p.wd>0))continue;const l=lastOf(g.id,'dose',p.id);if(!l)continue;const e=addD(l.date,p.wd);if(e>=t&&(!out||e>out.end))out={end:e,name:p.name}}return out}
 function addWeigh(g,date,lo,hi,count){const e={id:uid(),gid:g.id,type:'weigh',date,avg:r1((lo+hi)/2)};if(hi>lo){e.min=lo;e.max=hi}if(count)e.count=count;S.log.push(e);recompute(g)}
+const money=n=>(n||0).toLocaleString('en-IE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const usage=()=>S.groups.reduce((a,g)=>a+(g.meal||0),0)/7;
+function stockNow(){if(!S.set.stockDate)return null;return Math.max(0,(S.set.stockKg||0)-usage()*Math.max(0,days(S.set.stockDate,today())))}
+function runOut(){const sn=stockNow(),u=usage();if(sn==null||!u)return null;return addD(today(),Math.floor(sn/u))}
+function actualGain(g){const w=S.log.filter(e=>e.gid===g.id&&e.type==='weigh').sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+ for(let i=w.length-1;i>0;i--){const d=days(w[i-1].date,w[i].date);if(d>0)return{v:(w[i].avg-w[i-1].avg)/d,from:w[i-1].date,to:w[i].date}}return null}
+function feedEff(g){if(!g.meal||!g.count)return null;const a=actualGain(g),v=a&&a.v>0?a.v:g.dwg;if(!(v>0))return null;
+ const ph=g.meal/g.count/7,fcr=ph/v;return{v,actual:!!(a&&a.v>0),fcr,cost:S.set.price?fcr*S.set.price/1000:0}}
 function dueList(){const t=today(),out=[];for(const g of S.groups){const nw=nextW(g);
  if(nw)out.push({d:nw,txt:'Weigh '+g.name,sub:g.avg>=g.target?'Average already at move-on weight':'Should be about '+g.target+' kg by then'});
  if(g.bath&&g.bathEvery>0)out.push({d:addD(g.bath,g.bathEvery),txt:'Footbath '+g.name,sub:'Last done '+fmt(g.bath)});
  for(const p of S.products){const l=lastOf(g.id,'dose',p.id);if(!l)continue;
   if(p.every>0)out.push({d:addD(l.date,p.every),txt:p.name+' · '+g.name,sub:'Last dosed '+fmt(l.date)});
   if(p.wd>0){const e=addD(l.date,p.wd);if(e>=t)out.push({d:e,txt:'Withdrawal ends · '+g.name,sub:p.name+': not for slaughter before this date',wd:1})}}}
+ const ro=runOut();if(ro)out.push({d:addD(ro,-(S.set.lead||7)),txt:'Order meal',sub:'Bin runs out around '+fmt(ro)+' ('+Math.round(stockNow())+' kg left)'});
  return out.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0)}
 
 /* ---------- views ---------- */
-function stats(){const lambs=S.groups.reduce((a,g)=>a+(g.count||0),0),meal=S.groups.reduce((a,g)=>a+(g.meal||0),0),nx=dueList()[0];
- $('stats').innerHTML=[[lambs,'lambs'],[S.groups.length,S.groups.length===1?'group':'groups'],[meal>=1000?r1(meal/1000)+' t':meal+' kg','meal per week'],[nx?fmt(nx.d):'—',nx?'next: '+esc(nx.txt):'nothing due']].map(([b,s])=>`<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('')}
+function stats(){const lambs=S.groups.reduce((a,g)=>a+(g.count||0),0),meal=S.groups.reduce((a,g)=>a+(g.meal||0),0),nx=dueList()[0],sn=stockNow(),u=usage(),yr=today().slice(0,4);
+ const sold=S.log.filter(e=>e.type==='sale'&&e.date.startsWith(yr)).reduce((a,e)=>a+(e.n||0),0);
+ const ml=sn!=null&&u?[Math.floor(sn/u)+' days','meal left in bin']:[meal>=1000?r1(meal/1000)+' t':meal+' kg','meal per week'];
+ $('stats').innerHTML=[[lambs,'lambs on farm'],ml,[sold,'sold in '+yr],[nx?fmt(nx.d):'—',nx?'next: '+esc(nx.txt):'nothing due']].map(([b,t])=>`<div class="stat"><b>${b}</b><span>${t}</span></div>`).join('')}
 const job=x=>{const n=days(today(),x.d);const late=n<0&&!x.wd;return `<li class="${late?'late':''}"><div class="when">${fmt(x.d)}<small>${late?'overdue':rel(n)}</small></div><div><b>${esc(x.txt)}</b><div class="sm mute">${esc(x.sub)}</div></div></li>`};
 function card(g){const e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf(g.id,'dose');
  const pct=g.target&&e?Math.min(100,e/g.target*100):0,ph=g.count&&g.meal?g.meal/g.count/7:0;
@@ -178,7 +196,7 @@ function card(g){const e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf
  <dl><dt>Last weighed</dt><dd>${g.weighed?fmt(g.weighed)+' · '+(g.min?g.min+'–'+g.max+' kg':kg(g.avg)):'Not yet'}</dd>
  <dt>Daily gain</dt><dd>${g.dwg?Math.round(g.dwg*1000)+' g/day predicted':'Not set'}</dd>
  <dt>Next weigh</dt><dd class="${nw&&nw<=t?'due':''}">${nw?fmt(nw)+' ('+rel(days(t,nw))+')':'Needs weight, gain and target'}</dd>
- <dt>Meal</dt><dd>${g.meal?g.meal+' kg/wk · '+ph.toFixed(2)+' kg/head/day':'Not set'}</dd>
+ <dt>Meal</dt><dd>${g.meal?g.meal+' kg/wk · '+ph.toFixed(2)+' kg/head/day':'Not set'}</dd>${(fe=>fe?`<dt>Meal per kg gain</dt><dd>${r1(fe.fcr)} kg${fe.cost?' · €'+money(fe.cost):''}${fe.actual?'':' (predicted)'}</dd>`:'')(feedEff(g))}
  <dt>Last dose</dt><dd>${ld?esc(ld.pname)+' · '+fmt(ld.date):'None recorded'}</dd>
  <dt>Footbath</dt><dd class="${nb&&nb<=t?'due':''}">${g.bath?fmt(g.bath)+(nb?' · next '+fmt(nb):''):'None recorded'}</dd></dl>
  <div class="acts"><button class="btn y" data-a="weigh" data-id="${g.id}">Weigh</button><button class="btn" data-a="dose" data-id="${g.id}">Dose</button><button class="btn" data-a="bath" data-id="${g.id}">Footbath</button><button class="btn" data-a="more" data-id="${g.id}">More</button></div></article>`}
@@ -200,20 +218,42 @@ function vDoses(){const recent=S.log.filter(e=>e.type==='dose').sort((a,b)=>a.da
  <div class="btns"><button class="btn" data-a="editp" data-id="${p.id}">Edit</button></div></article>`).join('')}</div>`:'<div class="card mute">Add each wormer, fluke dose, vaccine or mineral drench you use, with its dose rate from the label.</div>'}
  <div class="row"><h2>Recent doses</h2>${S.groups.length&&S.products.length?'<button class="btn y" data-a="dose">Record a dose</button>':''}</div>
  ${recent.length?`<div class="card scroll"><table><thead><tr><th>Date</th><th>Group</th><th>Product</th><th class="n">Each</th></tr></thead><tbody>${recent.map(e=>`<tr><td class="n" style="text-align:left">${fmt(e.date)}</td><td>${esc(G(e.gid)?.name||'—')}</td><td>${esc(e.pname)}</td><td class="n">${e.ml?e.ml+' ml':'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="card mute">No doses recorded yet.</div>'}`}
-function vMore(){const pr=S.set.price||0;let tot=0,heads=0;
- const rows=S.groups.map(g=>{tot+=g.meal||0;heads+=g.count||0;const ph=g.count&&g.meal?g.meal/g.count/7:0;return `<tr><td>${esc(g.name)}</td><td class="n">${g.count||0}</td><td class="n">${g.meal||0}</td><td class="n">${ph?ph.toFixed(2):'—'}</td>${pr?`<td class="n">€${((g.meal||0)/1000*pr).toFixed(2)}</td>`:''}</tr>`}).join('');
- return `<div class="row"><h2>Meal</h2></div><div class="card">
- ${S.groups.length?`<div class="scroll"><table><thead><tr><th>Group</th><th class="n">Lambs</th><th class="n">kg/week</th><th class="n">kg/head/day</th>${pr?'<th class="n">€/week</th>':''}</tr></thead><tbody>${rows}</tbody>
- <tfoot><tr><td>Total</td><td class="n">${heads}</td><td class="n">${tot}</td><td class="n">${heads?(tot/heads/7).toFixed(2):'—'}</td>${pr?`<td class="n">€${(tot/1000*pr).toFixed(2)}</td>`:''}</tr></tfoot></table></div>
- <p class="sm mute">That's about ${r1(tot*4/1000)} t every 4 weeks. Change each group's meal under More → Edit group.</p>`:'<p class="mute">Add groups first.</p>'}
+function vMore(){const pr=S.set.price||0,u=usage(),sn=stockNow(),ro=runOut(),lead=S.set.lead||7;let tot=0,heads=0,anyPred=false;
+ const rows=S.groups.map(g=>{tot+=g.meal||0;heads+=g.count||0;const ph=g.count&&g.meal?g.meal/g.count/7:0,fe=feedEff(g);if(fe&&!fe.actual)anyPred=true;
+  return `<tr><td>${esc(g.name)}</td><td class="n">${g.count||0}</td><td class="n">${g.meal||0}</td><td class="n">${ph?ph.toFixed(2):'—'}</td><td class="n">${fe?Math.round(fe.v*1000)+(fe.actual?'':'*'):'—'}</td><td class="n">${fe?r1(fe.fcr)+' kg':'—'}</td><td class="n">${fe&&fe.cost?'€'+money(fe.cost):'—'}</td><td class="n">${pr?'€'+money((g.meal||0)/1000*pr):'—'}</td></tr>`}).join('');
+ const dl=(S.deliv||[]).slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,8);
+ return `<div class="row"><h2>Meal in the bin</h2><div class="btns"><button class="btn p" data-a="deliv">+ Delivery</button><button class="btn" data-a="stock">Count bin</button></div></div>
+ <div class="card">${sn==null?'<p class="mute" style="margin:0">Tap Count bin and put in how much meal you have now. The app then counts it down each day using every group\'s meal per week, and reminds you to order.</p>'
+ :`<div class="wt"><div><b class="big">${Math.round(sn).toLocaleString('en-IE')}</b> <span>kg left (estimate)</span></div><div class="mute">${u?`${Math.floor(sn/u)} days at ${Math.round(u)} kg/day`:'No meal set on any group'}</div></div>
+ ${ro?`<p style="margin:8px 0 0">Runs out around <b>${fmt(ro)}</b>. Order by <b>${fmt(addD(ro,-lead))}</b>.</p>`:''}<p class="sm mute" style="margin:6px 0 0">Last counted or topped up ${fmt(S.set.stockDate)}. Tap Count bin any time to correct it.</p>`}
+ <label class="f" style="max-width:300px;margin-top:12px">Remind me to order (days before it runs out)<input id="lead" type="number" inputmode="numeric" min="0" value="${lead}"></label>
+ ${dl.length?`<h3 style="margin:16px 0 4px">Deliveries</h3><ul class="hist">${dl.map(d=>`<li><div><div class="sm mute">${fmt(d.date)}</div><div><b>${d.kg.toLocaleString('en-IE')} kg</b>${d.price?' · €'+d.price+'/t':''}</div></div><button class="x" data-ddel="${d.id}" aria-label="Delete delivery">×</button></li>`).join('')}</ul>`:''}</div>
+ <div class="row"><h2>Meal use and cost per kg gained</h2></div><div class="card">
+ ${S.groups.length?`<div><table class="stack"><thead><tr><th>Group</th><th class="n">Lambs</th><th class="n">kg/week</th><th class="n">kg/head/day</th><th class="n">Gain g/day</th><th class="n">Meal per kg gain</th><th class="n">€ per kg gain</th><th class="n">€/week</th></tr></thead><tbody>${rows}</tbody>
+ <tfoot><tr><td>Total</td><td class="n">${heads}</td><td class="n">${tot}</td><td class="n">${heads?(tot/heads/7).toFixed(2):'—'}</td><td></td><td></td><td></td><td class="n">${pr?'€'+money(tot/1000*pr):'—'}</td></tr></tfoot></table></div>
+ <p class="sm mute">Gain is the actual gain between the group's last two weighings${anyPred?'. * means the predicted gain is used, until the group has been weighed twice':''}. This is meal cost only, not grass, doses or other costs, and moving lambs between weighings will throw it off. About ${r1(tot*4/1000)} t is used every 4 weeks.</p>`:'<p class="mute">Add groups first.</p>'}
  <label class="f" style="max-width:260px">Meal price (€ per tonne)<input id="price" type="number" inputmode="decimal" min="0" value="${pr||''}" placeholder="e.g. 380"></label></div>
  <div class="row"><h2>Backup</h2></div><div class="card" style="display:grid;gap:10px">
  <p class="sm mute" style="margin:0">Your records are saved on this phone. Every so often, tap Copy backup and paste it into Notes, so you have a copy if you change phones.</p>
  <div class="btns"><button class="btn" id="bcopy">Copy backup</button></div>
  <label class="f">Restore from a backup<textarea id="bin" rows="3" placeholder="Paste backup text here"></textarea></label>
  <div class="btns"><button class="btn" id="bload">Replace my records with this backup</button><button class="btn d" id="bwipe">Delete all records</button></div></div>`}
+let saleYr='';
+function vSales(){const all=S.log.filter(e=>e.type==='sale').sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0),yrs=[...new Set(all.map(e=>e.date.slice(0,4)))];
+ if(saleYr&&!yrs.includes(saleYr))saleYr='';const L=saleYr?all.filter(e=>e.date.startsWith(saleYr)):all;
+ const n=L.reduce((a,e)=>a+(e.n||0),0),inc=L.reduce((a,e)=>a+(e.income||0),0),cwL=L.filter(e=>e.cw),cwN=cwL.reduce((a,e)=>a+e.n,0),cw=cwN?cwL.reduce((a,e)=>a+e.cw*e.n,0)/cwN:0,
+  koL=L.filter(e=>e.cw&&e.lw),koN=koL.reduce((a,e)=>a+e.n,0),ko=koN?koL.reduce((a,e)=>a+e.cw/e.lw*e.n,0)/koN*100:0;
+ return `<div class="row"><h2>Sales</h2><div class="btns">${yrs.length?`<select id="syr" style="width:auto"><option value="">All years</option>${yrs.map(y=>`<option ${y===saleYr?'selected':''}>${y}</option>`).join('')}</select>`:''}<button class="btn p" data-a="sale">+ Record sale</button></div></div>
+ ${L.length?`<div class="sum"><div><span>Lambs sold</span><b>${n}</b></div><div><span>Paid</span><b>€${Math.round(inc).toLocaleString('en-IE')}</b></div><div><span>Per lamb</span><b>€${n?money(inc/n):'—'}</b></div><div><span>Avg carcass</span><b>${cw?r1(cw)+' kg':'—'}</b></div><div><span>Kill-out</span><b>${ko?r1(ko)+'%':'—'}</b></div></div>
+ <div class="card" style="margin-top:14px"><table class="stack"><thead><tr><th>Date</th><th>Group · sold to</th><th class="n">Lambs</th><th class="n">Carcass</th><th class="n">€/kg</th><th>Grade</th><th class="n">Paid</th><th></th></tr></thead><tbody>
+ ${L.map(e=>`<tr><td class="n" style="text-align:left">${fmt(e.date)}</td><td>${esc(e.gname||'—')} · ${esc(e.where||e.to||'')}</td><td class="n">${e.n}</td><td class="n">${e.cw?r1(e.cw)+' kg':'—'}</td><td class="n">${e.ppk?money(e.ppk):'—'}</td><td>${esc(e.grade||'—')}</td><td class="n">€${money(e.income)}</td><td><button class="x" data-sdel="${e.id}" aria-label="Delete sale">×</button></td></tr>`).join('')}</tbody></table></div>`
+ :'<div class="card mute">No sales yet. Tap Record sale after lambs go to the factory or mart. You can scan the factory docket to fill in the figures.</div>'}`}
 function render(){stats();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
- $('view').innerHTML=tab==='doses'?vDoses():tab==='more'?vMore():vFlock();
+ $('view').innerHTML=tab==='doses'?vDoses():tab==='sales'?vSales():tab==='more'?vMore():vFlock();
+ const sy=$('syr');if(sy)sy.onchange=()=>{saleYr=sy.value;render()};
+ document.querySelectorAll('[data-sdel]').forEach(x=>arm(x,'Delete?',()=>delSale(x.dataset.sdel)));
+ document.querySelectorAll('[data-ddel]').forEach(x=>arm(x,'Delete?',()=>{const d=S.deliv.find(q=>q.id===x.dataset.ddel);if(!d)return;S.deliv=S.deliv.filter(q=>q!==d);if(S.set.stockDate)S.set.stockKg=Math.max(0,(S.set.stockKg||0)-d.kg);save()}));
+ const ld=$('lead');if(ld)ld.onchange=()=>{S.set.lead=Math.round(num(ld.value));save()};
  const pdi=$('pdate');if(pdi)pdi.onchange=()=>{if(pdi.value){predDate=pdi.value;const y=scrollY;render();scrollTo(0,y)}};
  if(tab==='more'){$('price').onchange=e=>{S.set.price=num(e.target.value);save()};
   $('bcopy').onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(S));toast('Backup copied')}catch(e){$('bin').value=JSON.stringify(S);$('bin').select();toast('Select and copy the text below')}};
@@ -325,6 +365,7 @@ function line(e){switch(e.type){
  case'weigh':return`<b>Weighed</b> · ${e.min?e.min+'–'+e.max+' kg (avg '+e.avg+')':'avg '+e.avg+' kg'}${e.count?' · '+e.count+' lambs':''}`;
  case'dose':return`<b>Dosed</b> · ${esc(e.pname)}${e.ml?' · '+e.ml+' ml each':''}${e.note?' · '+esc(e.note):''}`;
  case'bath':return`<b>Footbathed</b>${e.sol?' · '+esc(e.sol):''}`;
+ case'sale':return`<b>Sold</b> · ${e.n} lambs to ${esc(e.where||e.to)}${e.income?' · €'+money(e.income):''}`;
  case'move':return e.dir==='out'?`<b>Moved out</b> · ${e.n} lambs to ${esc(e.other)}`:`<b>Moved in</b> · ${e.n} lambs from ${esc(e.other)}`;
  default:return''}}
 function forecast(g){if(!g.avg||!g.dwg)return '<p class="sm mute">Weigh the group and set a predicted daily gain to see a forecast.</p>';
@@ -334,16 +375,96 @@ function forecast(g){if(!g.avg||!g.dwg)return '<p class="sm mute">Weigh the grou
  return `<h3 style="margin:18px 0 4px">Predicted weights</h3><p class="sm mute" style="margin:0 0 6px">At ${Math.round(g.dwg*1000)} g/day from ${fmt(g.weighed)}${g.target?` · move on at ${g.target} kg`:''}</p>
  <div class="scroll"><table><thead><tr><th>Week</th><th class="n">Average</th><th class="n">Most lambs</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`}
 function groupSheet(g){const items=S.log.filter(e=>e.gid===g.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
- sheet(g.name,`<div class="btns"><button class="btn" id="ge">Edit group</button><button class="btn" id="gm">Move lambs</button></div>
+ sheet(g.name,`<div class="btns"><button class="btn" id="ge">Edit group</button><button class="btn" id="gm">Move lambs</button><button class="btn" id="gs">Record sale</button></div>
  ${g.notes?`<p class="sm">${esc(g.notes)}</p>`:''}
  ${forecast(g)}
  <h3 style="margin:18px 0 4px">History</h3>
  ${items.length?`<ul class="hist">${items.map(e=>`<li><div><div class="sm mute">${fmt(e.date)}</div><div>${line(e)}</div></div><button class="x" data-del="${e.id}" aria-label="Delete entry">×</button></li>`).join('')}</ul>`:'<p class="mute">Nothing recorded yet.</p>'}`,b=>{
- b.querySelector('#ge').onclick=()=>groupForm(g);b.querySelector('#gm').onclick=()=>moveForm(g);
+ b.querySelector('#ge').onclick=()=>groupForm(g);b.querySelector('#gm').onclick=()=>moveForm(g);b.querySelector('#gs').onclick=()=>saleForm(g.id);
  b.querySelectorAll('[data-del]').forEach(x=>arm(x,'Delete?',()=>{const e=S.log.find(l=>l.id===x.dataset.del);S.log=S.log.filter(l=>l!==e);
+  if(e&&e.type==='sale'&&e.ded)g.count=(g.count||0)+(e.n||0);
   if(e&&e.type==='move'){const n=e.n||0,o=S.groups.find(q=>q.name===e.other);g.count=Math.max(0,(g.count||0)+(e.dir==='out'?n:-n))}
   recompute(g);save();groupSheet(g)}))})}
 
+function delSale(id){const e=S.log.find(l=>l.id===id);if(!e)return;S.log=S.log.filter(l=>l!==e);const g=G(e.gid);if(g&&e.ded)g.count=(g.count||0)+(e.n||0);save();toast('Sale deleted')}
+function deliveryForm(){sheet('Meal delivery',`<form id="mdf">${field('Date','date',today(),'type="date"')}
+ <div class="two">${field('Amount (kg) <small>1 tonne = 1,000 kg</small>','kg','',numA+' required placeholder="e.g. 2000"')}${field('Price (€ per tonne)','price',S.set.price||'',numA)}</div>
+ <p class="sm mute" style="margin:0">This is added to what's in the bin now${stockNow()!=null?` (about ${Math.round(stockNow())} kg)`:''}.</p>
+ <button class="btn p" type="submit">Add delivery</button></form>`,b=>{const f=b.querySelector('#mdf');f.onsubmit=e=>{e.preventDefault();const k=num(f.kg.value);if(!k)return;
+ const pr=num(f.price.value);if(pr)S.set.price=pr;S.set.stockKg=(stockNow()||0)+k;S.set.stockDate=today();S.deliv=S.deliv||[];S.deliv.push({id:uid(),date:f.date.value||today(),kg:k,price:pr});save();close();toast('Delivery added')}})}
+function stockForm(){sheet('Count the bin',`<form id="msf">${field('Meal in the bin now (kg)','kg',stockNow()!=null?Math.round(stockNow()):'',numA+' required')}
+ <p class="sm mute" style="margin:0">Your best guess is fine. From today the app takes off each group's daily meal and reminds you ${S.set.lead||7} days before it runs out.</p>
+ <button class="btn p" type="submit">Save</button></form>`,b=>{const f=b.querySelector('#msf');f.onsubmit=e=>{e.preventDefault();S.set.stockKg=num(f.kg.value);S.set.stockDate=today();save();close();toast('Bin count saved')}})}
+function saleCalc(f){const n=num(f.n.value),cw=num(f.cw.value),lw=num(f.lw.value),ppk=num(f.ppk.value),ph=num(f.ph.value),net=num(f.net.value);
+ const gross=ppk&&cw?n*cw*ppk:ph?n*ph:0;return{n,cw,lw,ppk,ph,net,gross,income:net||gross,ko:cw&&lw?cw/lw*100:0}}
+function saleForm(gid){const g=gid?G(gid):null;
+ sheet('Record a sale',`<form id="sf">
+ <div class="scanbox"><label class="btn y">Scan factory docket<input type="file" id="dk" accept="image/*" hidden></label><div class="sm mute" id="dkm">Take a photo of the docket, flat, well lit and filling the screen. The figures it can read fill in below. Always check them against the docket.</div></div>
+ <label class="f">From group<select name="gid"><option value="">No group</option>${S.groups.map(x=>`<option value="${x.id}" ${x.id===gid?'selected':''}>${esc(x.name)} (${x.count||0})</option>`).join('')}</select></label>
+ <label class="ck"><input type="checkbox" name="ded" checked> Take these lambs off the group's count</label>
+ <div class="two">${field('Date','date',today(),'type="date" required')}${field('Number of lambs','n','','type="number" inputmode="numeric" min="1" required')}</div>
+ <div class="two"><label class="f">Sold to<select name="to"><option>Factory</option><option>Mart</option><option>Private</option></select></label>${field('Name','where','','placeholder="Factory or mart"')}</div>
+ <div class="two">${field('Avg live weight (kg)','lw',g&&g.avg?r1(heavy(g)):'',numA)}${field('Avg carcass weight (kg)','cw','',numA)}</div>
+ <div class="two">${field('Price (€/kg carcass)','ppk','',numA)}${field('or € per lamb','ph','',numA)}</div>
+ <div class="two">${field('Grade','grade','','placeholder="e.g. R3"')}${field('Net paid (€) <small>after deductions</small>','net','',numA)}</div>
+ <div class="prev" id="sp"></div>
+ ${field('Notes','note','')}
+ <button class="btn p" type="submit">Save sale</button></form>`,b=>{const f=b.querySelector('#sf');
+ const upd=()=>{const c=saleCalc(f);const bits=[];if(c.gross)bits.push('Gross €'+money(c.gross));if(c.net)bits.push('Net €'+money(c.net));if(c.income&&c.n)bits.push('<b>€'+money(c.income/c.n)+' per lamb</b>');if(c.ko)bits.push('Kill-out '+r1(c.ko)+'%');
+  if(c.gross&&c.net&&c.gross>c.net)bits.push('Deductions €'+money(c.gross-c.net));$('sp').innerHTML=bits.length?bits.join(' · '):'Fill in the weights and price to see the totals.'};
+ f.addEventListener('input',upd);f.addEventListener('change',e=>{if(e.target.name==='gid'){const x=G(f.gid.value);if(x&&x.avg&&!f.lw.value)f.lw.value=r1(heavy(x))}upd()});upd();
+ b.querySelector('#dk').onchange=e=>{const file=e.target.files&&e.target.files[0];if(file)readDocket(file,f,upd);e.target.value=''};
+ f.onsubmit=e=>{e.preventDefault();const c=saleCalc(f);if(!c.n)return;const x=G(f.gid.value),ded=!!(x&&f.ded.checked);if(ded)x.count=Math.max(0,(x.count||0)-c.n);
+  S.log.push({id:uid(),gid:x?x.id:'',gname:x?x.name:'',type:'sale',date:f.date.value||today(),n:c.n,to:f.to.value,where:f.where.value.trim(),lw:c.lw,cw:c.cw,ppk:c.ppk,ph:c.ph,net:c.net,gross:r1(c.gross*10)/10,income:Math.round(c.income*100)/100,grade:f.grade.value.trim(),note:f.note.value,ded});
+  save();close();toast('Sale saved'+(ded?` · ${x.count} left in ${x.name}`:''))}})}
+
+/* factory docket reader (runs on the phone, same reader as the Gym app) */
+let ocrW=null,ocrLoading=null;
+function loadScript(src){return new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+async function getOCR(msg){if(ocrW)return ocrW;if(ocrLoading)return ocrLoading;
+ ocrLoading=(async()=>{const abs=u=>new URL(u,location.href).href;if(!window.Tesseract)await loadScript(abs('../ocr/tesseract.min.js'));
+  ocrW=await Tesseract.createWorker('eng',1,{workerPath:abs('../ocr/worker.min.js'),corePath:abs('../ocr/core'),langPath:abs('../ocr/lang'),
+   logger:m=>{if(msg&&m&&m.status)msg(m.status.indexOf('recogniz')>=0?'Reading the docket… '+Math.round((m.progress||0)*100)+'%':'Getting the docket reader ready (first time only)…')}});
+  await ocrW.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});return ocrW})();
+ try{return await ocrLoading}finally{ocrLoading=null}}
+async function prepImage(file){const url=URL.createObjectURL(file);try{const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=url});
+ const sc=Math.min(2.5,2200/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');cv.width=Math.round(img.naturalWidth*sc);cv.height=Math.round(img.naturalHeight*sc);
+ const cx=cv.getContext('2d',{willReadFrequently:true});cx.drawImage(img,0,0,cv.width,cv.height);const d=cx.getImageData(0,0,cv.width,cv.height),a=d.data;let lo=255,hi=0;
+ for(let i=0;i<a.length;i+=4){const v=a[i]*.3+a[i+1]*.59+a[i+2]*.11;a[i]=v;if(v<lo)lo=v;if(v>hi)hi=v}
+ const k=255/Math.max(40,hi-lo);for(let i=0;i<a.length;i+=4){const v=Math.max(0,Math.min(255,(a[i]-lo)*k));a[i]=a[i+1]=a[i+2]=v}
+ cx.putImageData(d,0,0);return cv}finally{URL.revokeObjectURL(url)}}
+function parseDocket(raw){
+ const t=raw.replace(/[|\[\]{}]/g,' ').replace(/(\d)\s*[·:;]\s*(\d)/g,'$1.$2').replace(/(\d)\s*,\s*(\d{2})(?!\d)/g,'$1.$2');
+ const lines=t.split(/\n/).map(l=>l.trim()).filter(Boolean),out={},rows=[],grades={};
+ const moneyIn=l=>[...l.matchAll(/\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2}/g)].map(m=>+m[0].replace(/,/g,''));
+ const lineMax=re=>{let v=0;for(const l of lines)if(re.test(l)){const m=Math.max(0,...moneyIn(l));if(m>v)v=m}return v};
+ for(const l of lines){const nums=[...l.matchAll(/\d+\.\d{1,2}/g)].map(m=>+m[0]),gm=l.match(/(?:^|\s)([EUROP])\s?([1-5])(?=\s|$)/i);
+  let row=null;
+  for(const w of nums){if(w<8||w>45)continue;for(const pr of nums){if(pr===w||pr<2.5||pr>15)continue;
+   if(nums.some(v=>v>30&&Math.abs(w*pr-v)<=Math.max(1,v*.02))||gm){row={w,p:pr};break}}if(row)break}
+  if(row){rows.push(row);if(gm){const g=(gm[1]+gm[2]).toUpperCase();grades[g]=(grades[g]||0)+1}}}
+ const hd=t.match(/(?:no\.?|number|qty|total)\s*(?:of\s*)?(?:lambs|head|animals|hd)\D{0,6}(\d{1,3})\b/i)||t.match(/\b(\d{1,3})\s*(?:lambs|head|hd)\b/i);
+ out.n=hd&&+hd[1]>0?+hd[1]:rows.length||undefined;
+ const tw=t.match(/total\s*(?:cold\s*|carcass\s*)?(?:weight|wt|kgs?)\D{0,8}(\d+(?:\.\d+)?)/i),totW=tw?+tw[1]:0;
+ if(out.n&&totW&&totW/out.n>=8&&totW/out.n<=45)out.cw=r1(totW/out.n);else if(rows.length)out.cw=r1(rows.reduce((a,r)=>a+r.w,0)/rows.length);
+ const gross=lineMax(/gross|total\s*value/i),rw=rows.reduce((a,r)=>a+r.w,0);
+ if(gross&&totW&&gross/totW>=2.5&&gross/totW<=15)out.ppk=Math.round(gross/totW*100)/100;
+ else if(rw)out.ppk=Math.round(rows.reduce((a,r)=>a+r.w*r.p,0)/rw*100)/100;
+ else{const pk=t.match(/(\d{1,2}\.\d{2})\s*(?:€|eur|euro|c)?\s*(?:\/|per)\s*kg/i)||t.match(/price\D{0,10}(\d{1,2}\.\d{2})/i);if(pk&&+pk[1]>=2.5&&+pk[1]<=15)out.ppk=+pk[1]}
+ const g=Object.keys(grades).sort((a,b)=>grades[b]-grades[a]);if(g.length)out.grade=g[0];
+ const net=lineMax(/net|payable|amount\s*due|amount\s*paid|total\s*paid|to\s*pay|cheque|transfer/i);if(net>=20)out.net=net;
+ const dm=t.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](20\d{2}|\d{2})\b/);
+ if(dm){const y=dm[3].length===2?'20'+dm[3]:dm[3],mo=+dm[2],da=+dm[1];if(mo>=1&&mo<=12&&da>=1&&da<=31){const d=`${y}-${pad(mo)}-${pad(da)}`;if(d<=today())out.date=d}}
+ return out}
+async function readDocket(file,f,upd){const msg=t=>{const e=$('dkm');if(e)e.textContent=t};msg('Getting the docket reader ready (first time only)…');
+ try{const w=await getOCR(msg);msg('Reading the docket…');const cv=await prepImage(file);const r=await w.recognize(cv);if(!$('dkm'))return;
+  const v=parseDocket(r.data.text||''),names={n:'number of lambs',cw:'carcass weight',ppk:'price per kg',grade:'grade',net:'net paid',date:'date'},got=[];
+  for(const k of Object.keys(names))if(v[k]!=null&&v[k]!==''){f[k].value=v[k];f[k].classList.add('filled');got.push(names[k])}
+  if(got.length){f.to.value='Factory';upd()}
+  const miss=['n','cw','ppk','net'].filter(k=>v[k]==null).map(k=>names[k]);
+  msg(got.length?`Filled in ${got.join(', ')}. Check them against the docket.${miss.length?' Couldn\'t read '+miss.join(', ')+', so type '+(miss.length>1?'those':'that')+' in.':''}`
+   :'Couldn\'t read the figures. Try again with the docket flat, well lit and filling the photo, or type them in.')}
+ catch(e){msg('The docket reader couldn\'t start. The first time, it needs a signal to download. Or type the figures in.')}}
 function example(){const t=today(),a=uid(),b=uid(),c=uid(),p1=uid(),p2=uid();
  S.products=[{id:p1,name:'White drench (example)',kind:'Wormer',rate:2.5,per:10,wd:3,every:28,notes:''},{id:p2,name:'Cobalt + selenium (example)',kind:'Mineral / vitamin',rate:5,per:0,wd:0,every:42,notes:''}];
  S.groups=[{id:a,name:'30–35 kg',count:46,target:35,dwg:.22,meal:110,bathEvery:28},{id:b,name:'35–40 kg',count:38,target:40,dwg:.25,meal:150,bathEvery:28},{id:c,name:'40–45 kg',count:30,target:45,dwg:.28,meal:190,bathEvery:28}];
@@ -353,7 +474,7 @@ function example(){const t=today(),a=uid(),b=uid(),c=uid(),p1=uid(),p2=uid();
 
 document.addEventListener('click',e=>{const tb=e.target.closest('#tabs button');if(tb){tab=tb.dataset.t;render();scrollTo(0,0);return}
  const b=e.target.closest('[data-a]');if(!b)return;const id=b.dataset.id,g=id?G(id):null,all=S.groups.map(x=>x.id);
- const acts={addg:()=>groupForm(),example,weigh:()=>g&&weighForm(g),dose:()=>{if(!S.groups.length){toast('Add a group first');return}doseForm(g?[g.id]:all)},bath:()=>{if(!S.groups.length){toast('Add a group first');return}bathForm(g?[g.id]:all)},more:()=>g&&groupSheet(g),addp:()=>productForm(),editp:()=>{const p=P(id);p&&productForm(p)}};
+ const acts={addg:()=>groupForm(),example,weigh:()=>g&&weighForm(g),dose:()=>{if(!S.groups.length){toast('Add a group first');return}doseForm(g?[g.id]:all)},bath:()=>{if(!S.groups.length){toast('Add a group first');return}bathForm(g?[g.id]:all)},more:()=>g&&groupSheet(g),addp:()=>productForm(),sale:()=>saleForm(g?g.id:''),deliv:deliveryForm,stock:stockForm,editp:()=>{const p=P(id);p&&productForm(p)}};
  (acts[b.dataset.a]||(()=>{}))()});
 render();
 }</script></body></html>
