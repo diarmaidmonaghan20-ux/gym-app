@@ -418,9 +418,48 @@ function foodSheet(key){const fd=S.profile.foods[key];if(!fd)return;
  $('logIt').onclick=()=>{const g=num($('gIn').value);if(!g||g<=0){toast('Enter grams');return}logFood(key,g)};
  $('editIt').onclick=()=>foodForm({...fd,key});
 }
+/* nutrition label reader (runs on the phone) */
+let ocrW=null,ocrLoading=null;
+function loadScript(src){return new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+async function getOCR(msg){
+ if(ocrW)return ocrW;if(ocrLoading)return ocrLoading;
+ ocrLoading=(async()=>{if(!window.Tesseract)await loadScript('ocr/tesseract.min.js');const abs=u=>new URL(u,location.href).href;
+  ocrW=await Tesseract.createWorker('eng',1,{workerPath:abs('ocr/worker.min.js'),corePath:abs('ocr/core'),langPath:abs('ocr/lang'),
+   logger:m=>{if(msg&&m&&m.status)msg(m.status.indexOf('recogniz')>=0?'Reading the numbers… '+Math.round((m.progress||0)*100)+'%':'Getting the label reader ready (first time only)…')}});
+  await ocrW.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});return ocrW})();
+ try{return await ocrLoading}finally{ocrLoading=null}}
+async function prepImage(file){const url=URL.createObjectURL(file);try{const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=url});
+ const sc=Math.min(2.5,2000/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');cv.width=Math.round(img.naturalWidth*sc);cv.height=Math.round(img.naturalHeight*sc);
+ const cx=cv.getContext('2d',{willReadFrequently:true});cx.drawImage(img,0,0,cv.width,cv.height);const d=cx.getImageData(0,0,cv.width,cv.height),a=d.data;let lo=255,hi=0;
+ for(let i=0;i<a.length;i+=4){const g=a[i]*.3+a[i+1]*.59+a[i+2]*.11;a[i]=g;if(g<lo)lo=g;if(g>hi)hi=g}
+ const k=255/Math.max(40,hi-lo);for(let i=0;i<a.length;i+=4){const g=Math.max(0,Math.min(255,(a[i]-lo)*k));a[i]=a[i+1]=a[i+2]=g}
+ cx.putImageData(d,0,0);return cv}finally{URL.revokeObjectURL(url)}}
+function parseLabel(raw){
+ const t=raw.toLowerCase().replace(/[|\[\]{}]/g,' ').replace(/(\d)\s*[,·]\s*(\d)/g,'$1.$2').replace(/(\d)o/g,'$10').replace(/o(\d)/g,'0$1').replace(/(\d)\s+\.(\d)/g,'$1.$2');
+ const lines=t.split(/\n/).map(l=>l.trim()).filter(Boolean),out={};
+ const first=(l,max)=>{const m=[...l.matchAll(/(\d+(?:\.\d+)?)\s*(g|kcal|kj)?/g)].map(x=>+x[1]).filter(v=>v<=max);return m.length?m[0]:null};
+ let k=t.match(/(\d+(?:\.\d+)?)\s*k\s*c\s*a\s*l/);
+ if(k&&+k[1]<=900&&+k[1]>0)out.kcal=+k[1];
+ else{const h=t.match(/kj\s*\/\s*kcal[^\d]*(\d{2,4}(?:\.\d+)?)\s*\/\s*(\d{1,3}(?:\.\d+)?)/),m=t.match(/(\d{2,4}(?:\.\d+)?)\s*kj\s*\/\s*(\d{1,3}(?:\.\d+)?)\b/);
+  if(h&&+h[2]<=900)out.kcal=+h[2];else if(m&&+m[2]<=900)out.kcal=+m[2];else{const j=t.match(/(\d{2,4}(?:\.\d+)?)\s*kj/);if(j&&+j[1]<=3800)out.kcal=r0(+j[1]/4.184)}}
+ const pick=(re,bad)=>{for(const l of lines){if(re.test(l)&&!(bad&&bad.test(l))){const v=first(l.replace(re,' '),100);if(v!=null)return v}}return null};
+ const f=pick(/\bfat\b|^fat/,/satur|of which|mono|poly/),c=pick(/carbo\w*/,/of which|sugar/),p=pick(/prote\w*/);
+ if(f!=null)out.f=f;if(c!=null)out.c=c;if(p!=null)out.p=p;return out}
+async function readLabel(file){const msg=t=>{const e=$('lblMsg');if(e)e.textContent=t};
+ msg('Getting the label reader ready (first time only)…');
+ try{const w=await getOCR(msg);msg('Reading the numbers…');const cv=await prepImage(file);const r=await w.recognize(cv);
+  if(!$('lblMsg'))return;const v=parseLabel(r.data.text||'');const map={kcal:'fK',p:'fP',c:'fC',f:'fF'},names={kcal:'calories',p:'protein',c:'carbs',f:'fat'};
+  const got=Object.keys(map).filter(k=>v[k]!=null);got.forEach(k=>{const el=$(map[k]);el.value=v[k];el.style.outline='2px solid var(--green)'});
+  const miss=Object.keys(map).filter(k=>v[k]==null).map(k=>names[k]);
+  if(!got.length)msg('Couldn\'t read the numbers. Try again with the nutrition table filling the photo, flat and well lit, or type them in.');
+  else msg(`Filled in ${got.map(k=>names[k]).join(', ')} from the per 100 g column. Check them against the label.${miss.length?' Couldn\'t read '+miss.join(', ')+', so type '+(miss.length>1?'those':'that')+' in.':''}`);
+  if(!$('fName').value)$('fName').focus()}
+ catch(e){msg('The label reader couldn\'t start. Check your connection the first time you use it, or type the numbers in.')}}
 function foodForm(pre,note){pre=pre||{};
  const fld=(id,lab,v,type)=>`<label class="f">${lab}<input id="${id}" ${type==='t'?'type="text"':'type="number" inputmode="decimal" step="0.1"'} value="${esc(v??'')}"></label>`;
  openSheet(`<h2>${pre.key?'Edit food':'New food'}</h2>${note?`<div class="note">${esc(note)}</div>`:''}${pre.code?`<div class="small mute">Barcode ${esc(pre.code)}</div>`:''}
+ <label class="btn dark block" style="margin-top:12px">Read nutrition label from photo<input type="file" accept="image/*" capture="environment" id="lblIn" hidden></label>
+ <div id="lblMsg" class="small mute" style="margin-top:6px"></div>
  <div style="margin-top:10px">${fld('fName','Name',pre.name,'t')}</div>
  <p class="small mute" style="margin:12px 0 0">Nutrition per 100 g (from the label)</p>
  <div class="grid2">${fld('fK','Calories (kcal)',pre.kcal)}${fld('fP','Protein (g)',pre.p)}${fld('fC','Carbs (g)',pre.c)}${fld('fF','Fat (g)',pre.f)}</div>
@@ -429,7 +468,7 @@ function foodForm(pre,note){pre=pre||{};
  <button class="btn primary block" id="fSave" style="margin-top:14px">Save</button>
  ${pre.key?`<button class="btn block" id="fDel" style="margin-top:8px">Delete from my foods</button>`:''}
  <button class="btn block" data-close style="margin-top:8px">Cancel</button>`);
- if(!pre.name)setTimeout(()=>$('fName').focus(),60);
+ $('lblIn').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(file)readLabel(file)};
  $('fSave').onclick=()=>{const name=$('fName').value.trim(),v={kcal:num($('fK').value),p:num($('fP').value)??0,c:num($('fC').value)??0,f:num($('fF').value)??0};
   if(!name||v.kcal==null){toast('Name and calories are needed');return}
   const key=pre.key||pre.code||('m'+Date.now().toString(36));
@@ -501,7 +540,7 @@ async function handleCode(code){
  openSheet(`<h2>Looking up ${esc(code)}…</h2><p class="mute">One moment.</p>`);
  const on=await lookupOnline(code);
  if(on&&on.kcal!=null){S.profile.foods[code]={name:on.name||('Product '+code),brand:on.brand||'',code,kcal:on.kcal,p:on.p??0,c:on.c??0,f:on.f??0,lastG:100,src:'OFF'};saveProfile();foodSheet(code);return}
- foodForm({code},on?'Found online but without calorie info. Enter the per-100 g numbers from the label; it\'ll be remembered next time.':'Not found in Open Food Facts (or no connection). Enter the per-100 g numbers from the label once and it\'ll be remembered next time you scan it.');
+ foodForm({code},on?'Found online but without calorie info. Tap Read nutrition label from photo to fill it in. It\'s remembered next time.':'Not found in Open Food Facts. Tap Read nutrition label from photo and snap the nutrition table on the pack. It\'s remembered next time you scan it.');
 }
 let live=null;
 function stopScan(){if(live){try{live.reset()}catch(e){}live=null}const v=$('cam');if(v&&v.srcObject){v.srcObject.getTracks().forEach(t=>t.stop());v.srcObject=null}}
