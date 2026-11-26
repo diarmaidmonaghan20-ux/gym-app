@@ -482,4 +482,10 @@ document.addEventListener('click',e=>{const tb=e.target.closest('#tabs button');
  const acts={addg:()=>groupForm(),example,weigh:()=>g&&weighForm(g),dose:()=>{if(!S.groups.length){toast('Add a group first');return}doseForm(g?[g.id]:all)},bath:()=>{if(!S.groups.length){toast('Add a group first');return}bathForm(g?[g.id]:all)},more:()=>g&&groupSheet(g),addp:()=>productForm(),sale:()=>saleForm(g?g.id:''),deliv:deliveryForm,stock:stockForm,editp:()=>{const p=P(id);p&&productForm(p)}};
  (acts[b.dataset.a]||(()=>{}))()});
 render();
+/* keep the daily figures (meal left, estimated weights, due dates) current while the app stays open */
+let lastDay=today();
+const refresh=()=>{if(!$('ov').hidden)return;lastDay=today();const y=scrollY;render();scrollTo(0,y)};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
+addEventListener('pageshow',refresh);
+setInterval(()=>{if(today()!==lastDay)refresh()},60000);
 }</script></body></html>
