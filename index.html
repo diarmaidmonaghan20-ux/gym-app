@@ -103,6 +103,10 @@ textarea{width:100%;min-height:120px;font:13px ui-monospace,monospace;background
 @keyframes scan{from{transform:translateY(-40px)}to{transform:translateY(40px)}}
 @media (prefers-reduced-motion:reduce){.cam .aim::after{animation:none}}
 .src{font-size:12px;font-weight:600;color:var(--mute);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin-left:6px;white-space:nowrap}
+.meal-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.meal-head .k{font-family:"Barlow Condensed",Barlow,sans-serif;font-weight:700;font-size:20px;white-space:nowrap}
+.meal-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meal-acts .btn{flex:1 1 130px;font-size:15px;padding:8px 10px}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.rlist{list-style:none;padding:0;margin:10px 0}.rlist li{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}.rlist li span{flex:1}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:10px 0}
 </style>
 </head>
@@ -122,6 +126,7 @@ textarea{width:100%;min-height:120px;font:13px ui-monospace,monospace;background
  <div class="card">
   <label class="f">Add an exercise<select id="exSel"></select></label>
   <div class="row" id="customRow" hidden style="margin-top:8px"><input id="exName" placeholder="Name your exercise" autocomplete="off" style="flex:1 1 200px"><button class="btn primary" id="addEx">Add</button></div>
+  <p class="small mute" style="margin:14px 0 6px">Routines</p><div class="chips" id="routines" style="flex-wrap:wrap"></div>
  </div>
  <div id="trainList"></div>
 </section>
@@ -135,7 +140,7 @@ textarea{width:100%;min-height:120px;font:13px ui-monospace,monospace;background
   <button class="btn" id="newFoodBtn">New food</button>
  </div>
  <div id="recent"></div>
- <div class="card"><h3>Eaten</h3><div id="foodList"></div></div>
+ <div id="foodList"></div>
 </section>
 
 <section class="view" id="v-prog" hidden>
@@ -258,6 +263,7 @@ function lastSession(name,before){const ds=Object.keys(S.days).filter(k=>k<befor
 const best=s=>s.reduce((a,b)=>(!a||b.kg>a.kg||(b.kg===a.kg&&b.r>a.r))?b:a,null);
 const e1rm=s=>s.kg*(1+s.r/30);
 function renderTrain(){
+ renderRoutines();
  const d=S.days[cur]||{};const w=d.w||[];
  const sets=w.reduce((a,x)=>a+x.s.length,0),vol=w.reduce((a,x)=>a+x.s.reduce((b,s)=>b+s.kg*s.r,0),0);
  $('trainSum').innerHTML=`<div><span class="num">${w.length}</span><span>exercises</span></div><div><span class="num">${sets}</span><span>sets</span></div><div><span class="num">${r0(vol).toLocaleString('en-IE')}</span><span>kg volume</span></div>`;
@@ -270,6 +276,42 @@ function renderTrain(){
   return `<div class="card" data-i="${i}"><div class="ex-head"><div><h3>${esc(x.n)}</h3><div class="small mute">${last?`Last time ${esc(fmt(last.date,{day:'numeric',month:'short'}))}: ${last.s.map(s=>esc(s.kg)+'×'+esc(s.r)).join(', ')}`:'First time logging this'}</div></div><button class="x" data-act="rmEx" aria-label="Remove exercise">×</button></div>
   ${x.s.length?`<table class="sets">${x.s.map((s,j)=>`<tr><td class="n">${j+1}</td><td class="v">${s.kg?esc(s.kg)+' kg':'Bodyweight'} × ${esc(s.r)}${lb&&e1rm(s)>e1rm(lb)?' <span class="small" style="color:var(--green)">up</span>':''}</td><td class="r"><button class="x" data-act="rmSet" data-j="${j}" aria-label="Delete set">×</button></td></tr>`).join('')}</table>`:''}
   <div class="addset"><label class="f">Weight<select class="kg">${kgOpts(+ref.kg)}</select></label><label class="f">Reps<select class="reps">${repOpts(+ref.r)}</select></label><button class="btn dark" data-act="addSet">+ Set</button></div></div>`}).join('');
+}
+/* routines */
+const R=()=>S.profile.routines||(S.profile.routines=[]);
+function exOptions(){const mine=allEx().filter(n=>!PRESET.includes(n)).sort();
+ return (mine.length?`<optgroup label="My exercises">${mine.map(n=>`<option>${esc(n)}</option>`).join('')}</optgroup>`:'')+Object.entries(GROUPS).map(([g,l])=>`<optgroup label="${g}">${l.map(n=>`<option>${esc(n)}</option>`).join('')}</optgroup>`).join('')}
+function renderRoutines(){const w=(S.days[cur]||{}).w||[];
+ $('routines').innerHTML=R().map(r=>`<button class="chip" data-r="${esc(r.id)}">${esc(r.name)}</button>`).join('')
+  +(w.length?'<button class="chip" data-ract="saveToday">Save today as routine</button>':'')
+  +'<button class="chip" data-ract="new">+ New routine</button>'
+  +(R().length?'<button class="chip" data-ract="manage">Edit routines</button>':'');}
+$('routines').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.r){const r=R().find(x=>x.id===b.dataset.r);if(!r)return;const d=day(cur),before=JSON.parse(JSON.stringify(d.w));let n=0;
+  r.ex.forEach(x=>{if(!d.w.some(y=>y.n===x)){d.w.push({n:x,s:[]});n++}});
+  if(!n){toast('Already loaded');return}saveDay(cur);renderTrain();const ds=cur;toast(`${r.name}: ${n} exercise${n>1?'s':''} added`,()=>{day(ds).w=before;saveDay(ds);renderAll()});return}
+ const a=b.dataset.ract;
+ if(a==='saveToday')routineSheet(null,((S.days[cur]||{}).w||[]).map(x=>x.n));
+ if(a==='new')routineSheet(null,[]);
+ if(a==='manage')openSheet(`<h2>Your routines</h2><ul class="rlist">${R().map(r=>`<li><span><b>${esc(r.name)}</b><br><span class="small mute">${esc(r.ex.join(', '))}</span></span><button class="btn" data-edit="${esc(r.id)}">Edit</button></li>`).join('')}</ul><button class="btn block" data-close>Close</button>`),
+  $('sheetBody').querySelectorAll('[data-edit]').forEach(x=>x.onclick=()=>routineSheet(x.dataset.edit));
+});
+function routineSheet(id,start){const r=id?R().find(x=>x.id===id):null;let list=r?[...r.ex]:[...new Set(start||[])];
+ openSheet(`<h2>${r?'Edit routine':'New routine'}</h2>
+  <label class="f" style="margin-top:10px">Name<input id="rName" placeholder="e.g. Push day" value="${esc(r?r.name:'')}"></label>
+  <p class="small mute" style="margin:14px 0 0">Exercises, in order</p><ul class="rlist" id="rList"></ul>
+  <label class="f">Add exercise<select id="rAdd"><option value="">Choose exercise…</option>${exOptions()}</select></label>
+  <button class="btn primary block" id="rSave" style="margin-top:14px">Save routine</button>
+  ${r?'<button class="btn block" id="rDel" style="margin-top:8px">Delete routine</button>':''}
+  <button class="btn block" data-close style="margin-top:8px">Cancel</button>`);
+ if(!r)setTimeout(()=>$('rName').focus(),60);
+ const draw=()=>{$('rList').innerHTML=list.length?list.map((n,i)=>`<li><span>${i+1}. ${esc(n)}</span>${i?`<button class="x" data-up="${i}" aria-label="Move up">↑</button>`:''}<button class="x" data-rm="${i}" aria-label="Remove">×</button></li>`).join(''):'<li><span class="mute">No exercises yet. Add some below.</span></li>'};
+ draw();
+ $('rList').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.rm!=null)list.splice(+b.dataset.rm,1);if(b.dataset.up!=null){const i=+b.dataset.up;[list[i-1],list[i]]=[list[i],list[i-1]]}draw()};
+ $('rAdd').onchange=()=>{const v=$('rAdd').value;$('rAdd').value='';if(v&&!list.includes(v)){list.push(v);draw()}};
+ $('rSave').onclick=()=>{const name=$('rName').value.trim();if(!name){toast('Give the routine a name');return}if(!list.length){toast('Add at least one exercise');return}
+  if(r){r.name=name;r.ex=list}else R().push({id:'r'+Date.now().toString(36),name,ex:list});saveProfile();closeSheet();renderAll();toast(name+' saved')};
+ if(r)$('rDel').onclick=()=>{const i=R().indexOf(r);R().splice(i,1);saveProfile();closeSheet();renderAll();toast(r.name+' deleted',()=>{R().splice(i,0,r);saveProfile();renderAll()})};
 }
 function addExercise(name){const n=(typeof name==='string'?name:$('exName').value).trim();if(!n)return;$('customRow').hidden=true;const d=day(cur);d.w.push({n,s:[]});
  if(!(S.profile.ex||[]).includes(n)){S.profile.ex=[...(S.profile.ex||[]),n];saveProfile()}
@@ -331,6 +373,12 @@ $('bwList').addEventListener('click',e=>{const b=e.target.closest('[data-d]');if
 
 /* ---------- food ---------- */
 const G=()=>S.profile.goals;
+const MEALS=[['b','Breakfast'],['l','Lunch'],['d','Dinner'],['s','Snacks']];
+const mealName=m=>(MEALS.find(x=>x[0]===m)||MEALS[3])[1];
+const mealNow=()=>{const h=new Date().getHours();return h<11?'b':h<16?'l':h<21?'d':'s'};
+let meal=null;const tgtMeal=()=>meal||mealNow();
+const mealSelect=()=>`<label class="f" style="margin-top:10px">Meal<select id="mealSel">${MEALS.map(([k,n])=>`<option value="${k}"${k===tgtMeal()?' selected':''}>${n}</option>`).join('')}</select></label>`;
+function prevMeal(m){const ks=Object.keys(S.days).filter(k=>k<cur).sort().reverse();for(const k of ks){const es=(S.days[k].f||[]).filter(e=>(e.m||'s')===m);if(es.length)return{date:k,es}}return null}
 const calc=(fd,g)=>({kcal:r0(fd.kcal*g/100),p:r1(fd.p*g/100),c:r1(fd.c*g/100),f:r1(fd.f*g/100)});
 function renderFood(){
  const f=(S.days[cur]||{}).f||[];const t=f.reduce((a,e)=>({kcal:a.kcal+e.kcal,p:a.p+e.p,c:a.c+e.c,f:a.f+e.f}),{kcal:0,p:0,c:0,f:0});const g=G();
@@ -338,18 +386,29 @@ function renderFood(){
  const m=(lab,k,c)=>`<div><span class="small mute"><span class="plate" style="background:${c}"></span>${lab}</span><div class="num">${r0(t[k])}<span class="small mute"> / ${esc(g[k])} g</span></div><div class="bar"><i style="width:${pct(t[k],g[k])}%;background:${c}"></i></div></div>`;
  const left=g.kcal-r0(t.kcal);
  $('totals').innerHTML=`<div class="kcal"><span class="num">${r0(t.kcal).toLocaleString('en-IE')}</span><span class="mute">/ ${esc(Number(g.kcal).toLocaleString('en-IE'))} kcal</span></div><div class="bar"><i style="width:${pct(t.kcal,g.kcal)}%;background:var(--green)"></i></div><p class="small mute" style="margin:-4px 0 12px">${left>=0?left.toLocaleString('en-IE')+' kcal left':(-left).toLocaleString('en-IE')+' kcal over'}</p><div class="macros">${m('Protein','p','var(--red)')}${m('Carbs','c','var(--yellow)')}${m('Fat','f','var(--blue)')}</div>`;
- $('foodList').innerHTML=f.length?f.map((e,i)=>`<div class="entry"><div class="t"><b>${esc(e.name)}</b><span class="small mute">${esc(e.g)} g · P ${esc(e.p)} · C ${esc(e.c)} · F ${esc(e.f)}</span></div><span class="k">${esc(e.kcal)} kcal</span><button class="x" data-i="${i}" aria-label="Delete food entry">×</button></div>`).join(''):`<div class="empty">Nothing logged for ${esc(fmt(cur))}.<br>Scan a barcode or search for a food.</div>`;
+ $('foodList').innerHTML=MEALS.map(([m,name])=>{const es=f.map((e,i)=>[e,i]).filter(([e])=>(e.m||'s')===m);const kc=es.reduce((a,[e])=>a+e.kcal,0);const pv=prevMeal(m);
+  const pk=pv?pv.es.reduce((a,e)=>a+e.kcal,0):0,lab=pv?(pv.date===shift(cur,-1)?"Copy yesterday's":'Copy from '+fmt(pv.date,{weekday:'short',day:'numeric',month:'short'})):'';
+  return `<div class="card"><div class="meal-head"><h3>${name}</h3><span class="k">${es.length?r0(kc).toLocaleString('en-IE')+' kcal':''}</span></div>
+  ${es.map(([e,i])=>`<div class="entry"><div class="t"><b>${esc(e.name)}</b><span class="small mute">${esc(e.g)} g · P ${esc(e.p)} · C ${esc(e.c)} · F ${esc(e.f)}</span></div><span class="k">${esc(e.kcal)} kcal</span><button class="x" data-i="${i}" aria-label="Delete food entry">×</button></div>`).join('')}
+  <div class="meal-acts"><button class="btn" data-add="${m}">+ Add</button>${pv&&!es.length?`<button class="btn" data-copy="${m}">${esc(lab)} · ${r0(pk)} kcal</button>`:''}</div></div>`}).join('');
  const seen=new Set(),rec=[];Object.keys(S.days).sort().reverse().forEach(k=>(S.days[k].f||[]).slice().reverse().forEach(e=>{if(e.key&&S.profile.foods[e.key]&&!seen.has(e.key)&&rec.length<10){seen.add(e.key);rec.push(e.key)}}));
  $('recent').innerHTML=rec.length?`<p class="small mute" style="margin:0 0 6px">Quick add</p><div class="chips" style="margin-bottom:14px">${rec.map(k=>`<button class="chip" data-k="${esc(k)}">${esc(S.profile.foods[k].name)}</button>`).join('')}</div>`:'';
 }
-$('recent').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(b)foodSheet(b.dataset.k)});
-$('foodList').addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(!b)return;const i=+b.dataset.i,ds=cur,it=day(ds).f.splice(i,1)[0];saveDay(ds);renderFood();toast(it.name+' removed',()=>{day(ds).f.splice(i,0,it);saveDay(ds);renderAll()})});
+$('recent').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(b){meal=null;foodSheet(b.dataset.k)}});
+$('foodList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const ds=cur;
+ if(b.dataset.i!=null){const i=+b.dataset.i,it=day(ds).f.splice(i,1)[0];saveDay(ds);renderFood();toast(it.name+' removed',()=>{day(ds).f.splice(i,0,it);saveDay(ds);renderAll()});return}
+ if(b.dataset.copy){const m=b.dataset.copy,pv=prevMeal(m);if(!pv)return;const d=day(ds),n0=d.f.length;pv.es.forEach(x=>d.f.push({...JSON.parse(JSON.stringify(x)),m}));saveDay(ds);renderFood();
+  toast(`${mealName(m)} copied: ${pv.es.length} item${pv.es.length>1?'s':''}`,()=>{day(ds).f.splice(n0,pv.es.length);saveDay(ds);renderAll()});return}
+ if(b.dataset.add){meal=b.dataset.add;openSheet(`<h2>Add to ${mealName(meal)}</h2><div class="actions" style="margin-top:14px"><button class="btn primary" id="aScan">Scan</button><button class="btn" id="aSearch">Search</button><button class="btn" id="aNew">New food</button></div><button class="btn block" data-close>Cancel</button>`);
+  $('aScan').onclick=liveScan;$('aSearch').onclick=()=>myFoods();$('aNew').onclick=()=>foodForm()}
+});
 
-function logFood(key,g){const fd=S.profile.foods[key];const c=calc(fd,g);day(cur).f.push({key,name:fd.name,g:r1(g),...c});fd.lastG=r1(g);saveDay(cur);saveProfile();closeSheet();renderAll();toast(`${fd.name} added: ${c.kcal} kcal`)}
+function logFood(key,g){const fd=S.profile.foods[key];const c=calc(fd,g);const ms=$('mealSel'),m=ms?ms.value:tgtMeal();day(cur).f.push({key,name:fd.name,g:r1(g),...c,m});fd.lastG=r1(g);saveDay(cur);saveProfile();closeSheet();meal=null;renderAll();toast(`${fd.name} added to ${mealName(m).toLowerCase()}: ${c.kcal} kcal`)}
 function foodSheet(key){const fd=S.profile.foods[key];if(!fd)return;
  openSheet(`<h2>${esc(fd.name)}</h2>${fd.brand?`<div class="mute small">${esc(fd.brand)}</div>`:''}<p class="small mute">Per 100 g: ${esc(fd.kcal)} kcal · P ${esc(fd.p)} g · C ${esc(fd.c)} g · F ${esc(fd.f)} g</p>
  <label class="f">How many grams did you eat?<input id="gIn" type="number" inputmode="decimal" value="${esc(fd.lastG||100)}" autofocus></label>
  <div class="chips" style="margin-top:8px">${[25,50,100,150,200,250].map(v=>`<button class="chip" data-g="${v}">${v} g</button>`).join('')}</div>
+ ${mealSelect()}
  <div class="preview" id="pv"></div>
  <button class="btn primary block" id="logIt">Add to ${esc(cur===today()?'today':fmt(cur))}</button>
  <div class="grid2"><button class="btn" id="editIt">Edit values</button><button class="btn" data-close>Cancel</button></div>`);
@@ -366,6 +425,7 @@ function foodForm(pre,note){pre=pre||{};
  <p class="small mute" style="margin:12px 0 0">Nutrition per 100 g (from the label)</p>
  <div class="grid2">${fld('fK','Calories (kcal)',pre.kcal)}${fld('fP','Protein (g)',pre.p)}${fld('fC','Carbs (g)',pre.c)}${fld('fF','Fat (g)',pre.f)}</div>
  ${fld('fG','Grams eaten now (leave blank to just save)',pre.key?'':(pre.lastG||''))}
+ ${mealSelect()}
  <button class="btn primary block" id="fSave" style="margin-top:14px">Save</button>
  ${pre.key?`<button class="btn block" id="fDel" style="margin-top:8px">Delete from my foods</button>`:''}
  <button class="btn block" data-close style="margin-top:8px">Cancel</button>`);
@@ -416,7 +476,7 @@ function myFoods(start){
   if(key&&S.profile.foods[key]){foodSheet(key);return}
   const k2=key||('m'+Date.now().toString(36));S.profile.foods[k2]={name:h.name,brand:h.brand,code:h.code,kcal:h.kcal,p:h.p,c:h.c,f:h.f,lastG:100,src:h.src};saveProfile();foodSheet(k2)};
 }
-$('myFoodsBtn').onclick=myFoods;$('newFoodBtn').onclick=()=>foodForm();
+$('myFoodsBtn').onclick=()=>{meal=null;myFoods()};$('newFoodBtn').onclick=()=>{meal=null;foodForm()};
 
 /* ---------- barcode scanning ---------- */
 let reader=null,hints=null;
@@ -470,7 +530,7 @@ async function liveScan(){
   setTimeout(tick,120)};
  tick();
 }
-$('scanBtn').onclick=liveScan;
+$('scanBtn').onclick=()=>{meal=null;liveScan()};
 $('scanIn').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;
  openSheet(`<h2>Reading barcode…</h2><p class="mute">Hold tight.</p>`);
  let code=null;try{code=await decodeImage(file)}catch(err){}
