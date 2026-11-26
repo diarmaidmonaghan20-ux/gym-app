@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en-IE"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lambs">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1d4728">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Lamb tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: practical farm tool, quick to use in the yard on a phone.
+   IDEA: the mart pen board — each group is a pen with a yellow ear tag for a name.
+   PICTURE: the group cards themselves, with the estimated weight large and a bar toward the move-on weight.
+   COLOUR and TYPE: deep grass green, white, ear-tag yellow accent; Barlow Condensed + Barlow.
+   LAYOUT: green header band with flock totals, then jobs coming up, then the group pens. */
+:root{color-scheme:light dark;--bg:light-dark(#f3f5ef,#0e1711);--card:light-dark(#fff,#16231a);--ink:light-dark(#15211a,#edf2ea);--mute:light-dark(#56665b,#9db0a1);--line:light-dark(#dce3d7,#2a3b2f);--green:#1d4728;--pri:light-dark(#1d4728,#3f8d52);--bar:light-dark(#2f6b3c,#7fc48f);--tag:#f3c400;--red:light-dark(#b3261e,#ff8f86);--redbg:light-dark(#fdecea,#3a1916);--soft:light-dark(#eef2ea,#1d2d21)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif;overflow-x:clip}
+h1,h2,.big,.tag,.stat b,.when{font-family:'Barlow Condensed',Barlow,sans-serif;font-weight:700;line-height:1.05}
+.wrap{max-width:1100px;margin:0 auto;padding:0 max(4vw,14px)}
+.top{background:var(--green);color:#fff;padding-top:max(18px,env(safe-area-inset-top))}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;flex-wrap:wrap}
+h1{font-size:clamp(36px,7vw,50px);margin:0}
+.sync{font-size:13px;opacity:.8}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0 8px}
+.stat{background:rgba(255,255,255,.09);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font-size:30px;color:var(--tag);white-space:nowrap}
+.stat span{font-size:13px;opacity:.85}
+.tabs{display:flex;gap:2px;overflow-x:auto}
+.tabs button{flex:none;background:none;border:0;color:#fff;opacity:.75;font:600 16px Barlow,sans-serif;padding:10px 14px;min-height:46px;border-bottom:3px solid transparent;cursor:pointer}
+.tabs button.on{opacity:1;border-color:var(--tag)}
+main{padding-top:6px;padding-bottom:70px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:24px 0 12px}
+h2{font-size:30px;margin:0}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:600 15px Barlow,sans-serif;cursor:pointer}
+.btn.p{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn.y{background:var(--tag);border-color:var(--tag);color:#1a1a1a}
+.btn.d{color:var(--red)}
+.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.tabs button:focus-visible{outline:3px solid var(--tag);outline-offset:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:14px}
+.g{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.gh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tag{background:var(--tag);color:#1a1a1a;font-size:24px;padding:6px 14px 6px 30px;border-radius:8px 8px 16px 16px;position:relative;overflow-wrap:anywhere;box-shadow:0 2px 0 rgba(0,0,0,.18)}
+.tag::before{content:'';position:absolute;left:10px;top:50%;width:11px;height:11px;margin-top:-5px;border-radius:50%;background:var(--card);box-shadow:inset 0 1px 2px rgba(0,0,0,.4)}
+.cnt{font-weight:600;color:var(--mute);white-space:nowrap}
+.wt{display:flex;justify-content:space-between;align-items:flex-end;gap:4px 10px;flex-wrap:wrap}
+.big{font-size:46px}.wt span{color:var(--mute)}
+.bar{height:10px;border-radius:6px;background:var(--soft);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--bar);border-radius:6px}
+dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 12px;margin:0;font-size:15px}
+dt{color:var(--mute)}dd{margin:0;text-align:right}
+.due{color:var(--red);font-weight:600}
+.chip{display:inline-block;background:var(--redbg);color:var(--red);font-weight:600;font-size:14px;border-radius:8px;padding:4px 10px}
+.kind{display:inline-block;background:var(--soft);font-size:13px;font-weight:600;border-radius:6px;padding:2px 8px}
+.acts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:auto}
+.acts .btn{padding:0 4px}
+.jobs{list-style:none;margin:0;padding:0}
+.jobs li{display:grid;grid-template-columns:5.6em minmax(0,1fr);gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.jobs li:first-child{border-top:0}
+.when{font-size:21px}.when small{display:block;font:500 13px Barlow,sans-serif;color:var(--mute)}
+.late .when,.late .when small{color:var(--red)}
+summary{cursor:pointer;font-weight:600;padding:10px 0;min-height:44px}
+.mute{color:var(--mute)}.sm{font-size:14px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sh{background:var(--card);width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:0 18px max(22px,env(safe-area-inset-bottom))}
+@media(min-width:700px){.ov{align-items:center}.sh{border-radius:18px}}
+.shh{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;background:var(--card);padding:14px 0 10px;z-index:1}
+.shh h2{font-size:26px}
+.x{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:var(--soft);color:var(--ink);font-size:26px;line-height:1;cursor:pointer}
+form{display:grid;gap:12px}
+.f{display:grid;gap:4px;font-weight:600;font-size:15px}
+.f small{font-weight:400;color:var(--mute)}
+input,select,textarea{font:16px Barlow,sans-serif;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end}
+fieldset{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:0;display:grid;gap:8px}
+legend{font-weight:600;font-size:15px;padding:0 4px}
+.ck{display:flex;align-items:center;gap:10px;min-height:42px;font-size:16px}
+.ck input{width:22px;height:22px;min-height:22px;flex:none;accent-color:var(--pri)}
+.seg{display:flex;background:var(--soft);border-radius:10px;padding:3px;gap:3px}
+.seg label{flex:1;display:grid;place-items:center;min-height:42px;border-radius:8px;cursor:pointer;font-weight:600}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.prev{background:var(--soft);border-radius:10px;padding:10px 12px;font-size:15px}
+.dl{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:6px;margin-top:6px}
+.toast{position:fixed;left:50%;bottom:max(22px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;z-index:20;font-weight:600}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--mute);font-weight:600}
+.n{text-align:right;white-space:nowrap}tfoot td{font-weight:700;border-bottom:0}
+.empty{text-align:center;padding:40px 16px}.empty p{max-width:40ch;margin:8px auto 18px}
+.hist{list-style:none;margin:0;padding:0}
+.hist li{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)}
+.hist .x{width:40px;height:40px;font-size:20px}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.big{font-size:40px}}
+@media(prefers-reduced-motion:no-preference){.bar i{transition:width .5s}}
+</style></head><body>
+<header class="top"><div class="wrap">
+ <div class="brand"><h1>Lamb tracker</h1><span class="sync">Saved on this phone</span></div>
+ <div class="stats" id="stats"></div>
+ <nav class="tabs" id="tabs"><button data-t="flock" class="on">Groups</button><button data-t="doses">Doses</button><button data-t="more">Meal &amp; backup</button></nav>
+</div></header>
+<main class="wrap" id="view"></main>
+<div id="ov" class="ov" hidden><div class="sh" role="dialog" aria-modal="true" aria-labelledby="sht"><div class="shh"><h2 id="sht"></h2><button class="x" id="shx" aria-label="Close">×</button></div><div id="shb"></div></div></div>
+<div id="toast" class="toast" hidden></div>
+<script>{
+const KEY='lambtracker.v1';
+const blank=()=>({groups:[],products:[],log:[],set:{price:0},updated:0});
+let S=blank(),tab='flock';
+try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(blank(),JSON.parse(r))}catch(e){}
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+const pad=n=>String(n).padStart(2,'0');
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const ms=s=>Date.parse(s+'T00:00:00Z');
+const days=(a,b)=>Math.round((ms(b)-ms(a))/864e5);
+const addD=(a,n)=>new Date(ms(a)+Math.round(n)*864e5).toISOString().slice(0,10);
+const fmt=s=>s?new Date(ms(s)).toLocaleDateString('en-IE',{day:'numeric',month:'short',timeZone:'UTC'}):'—';
+const rel=n=>n===0?'today':n===1?'tomorrow':n===-1?'yesterday':n>0?'in '+n+' days':(-n)+' days ago';
+const num=v=>{const n=parseFloat(v);return isFinite(n)?n:0};
+const r1=n=>Math.round(n*10)/10;
+const kg=n=>r1(n)+' kg';
+const G=id=>S.groups.find(g=>g.id===id);
+const P=id=>S.products.find(p=>p.id===id);
+
+/* ---------- saving: on this phone ---------- */
+function save(){S.updated=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save. Is the phone storage full?')}render()}
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(()=>{});
+
+/* ---------- maths ---------- */
+const since=g=>g.weighed?Math.max(0,days(g.weighed,today())):0;
+const est=g=>g.avg?g.avg+(g.dwg||0)*since(g):0;
+const heavy=g=>{const t=g.max||g.avg;return t?t+(g.dwg||0)*since(g):0};
+function nextW(g){if(!g.avg||!g.target)return null;if(g.avg>=g.target)return g.weighed||today();if(!g.dwg)return null;return addD(g.weighed||today(),Math.ceil((g.target-g.avg)/g.dwg))}
+function lastOf(gid,type,pid){let b=null;for(const e of S.log)if(e.gid===gid&&e.type===type&&(!pid||e.pid===pid)&&(!b||e.date>=b.date))b=e;return b}
+function recompute(g){const w=lastOf(g.id,'weigh');g.avg=w?w.avg:0;g.min=w&&w.min||0;g.max=w&&w.max||0;g.weighed=w?w.date:'';const b=lastOf(g.id,'bath');g.bath=b?b.date:''}
+function doseMl(p,w){if(!(p.per>0))return p.rate||0;if(!w)return 0;return Math.ceil(w*p.rate/p.per*2)/2}
+function withdrawal(g){let out=null;const t=today();for(const p of S.products){if(!(p.wd>0))continue;const l=lastOf(g.id,'dose',p.id);if(!l)continue;const e=addD(l.date,p.wd);if(e>=t&&(!out||e>out.end))out={end:e,name:p.name}}return out}
+function addWeigh(g,date,lo,hi,count){const e={id:uid(),gid:g.id,type:'weigh',date,avg:r1((lo+hi)/2)};if(hi>lo){e.min=lo;e.max=hi}if(count)e.count=count;S.log.push(e);recompute(g)}
+function dueList(){const t=today(),out=[];for(const g of S.groups){const nw=nextW(g);
+ if(nw)out.push({d:nw,txt:'Weigh '+g.name,sub:g.avg>=g.target?'Average already at move-on weight':'Should be about '+g.target+' kg by then'});
+ if(g.bath&&g.bathEvery>0)out.push({d:addD(g.bath,g.bathEvery),txt:'Footbath '+g.name,sub:'Last done '+fmt(g.bath)});
+ for(const p of S.products){const l=lastOf(g.id,'dose',p.id);if(!l)continue;
+  if(p.every>0)out.push({d:addD(l.date,p.every),txt:p.name+' · '+g.name,sub:'Last dosed '+fmt(l.date)});
+  if(p.wd>0){const e=addD(l.date,p.wd);if(e>=t)out.push({d:e,txt:'Withdrawal ends · '+g.name,sub:p.name+': not for slaughter before this date',wd:1})}}}
+ return out.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0)}
+
+/* ---------- views ---------- */
+function stats(){const lambs=S.groups.reduce((a,g)=>a+(g.count||0),0),meal=S.groups.reduce((a,g)=>a+(g.meal||0),0),nx=dueList()[0];
+ $('stats').innerHTML=[[lambs,'lambs'],[S.groups.length,S.groups.length===1?'group':'groups'],[meal>=1000?r1(meal/1000)+' t':meal+' kg','meal per week'],[nx?fmt(nx.d):'—',nx?'next: '+esc(nx.txt):'nothing due']].map(([b,s])=>`<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('')}
+const job=x=>{const n=days(today(),x.d);const late=n<0&&!x.wd;return `<li class="${late?'late':''}"><div class="when">${fmt(x.d)}<small>${late?'overdue':rel(n)}</small></div><div><b>${esc(x.txt)}</b><div class="sm mute">${esc(x.sub)}</div></div></li>`};
+function card(g){const e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf(g.id,'dose');
+ const pct=g.target&&e?Math.min(100,e/g.target*100):0,ph=g.count&&g.meal?g.meal/g.count/7:0;
+ const nb=g.bath&&g.bathEvery>0?addD(g.bath,g.bathEvery):'';
+ return `<article class="g"><div class="gh"><span class="tag">${esc(g.name)}</span><span class="cnt">${g.count||0} lambs</span></div>
+ <div class="wt"><div><b class="big">${e?r1(e):'—'}</b> <span>kg est. today</span></div>${g.target?`<div class="mute">Move on at <b>${g.target} kg</b></div>`:''}</div>
+ <div class="bar" title="${Math.round(pct)}% of move-on weight"><i style="width:${pct}%"></i></div>
+ ${wd?`<div><span class="chip">In withdrawal until ${fmt(wd.end)}</span></div>`:''}
+ <dl><dt>Last weighed</dt><dd>${g.weighed?fmt(g.weighed)+' · '+(g.min?g.min+'–'+g.max+' kg':kg(g.avg)):'Not yet'}</dd>
+ <dt>Daily gain</dt><dd>${g.dwg?Math.round(g.dwg*1000)+' g/day predicted':'Not set'}</dd>
+ <dt>Next weigh</dt><dd class="${nw&&nw<=t?'due':''}">${nw?fmt(nw)+' ('+rel(days(t,nw))+')':'Needs weight, gain and target'}</dd>
+ <dt>Meal</dt><dd>${g.meal?g.meal+' kg/wk · '+ph.toFixed(2)+' kg/head/day':'Not set'}</dd>
+ <dt>Last dose</dt><dd>${ld?esc(ld.pname)+' · '+fmt(ld.date):'None recorded'}</dd>
+ <dt>Footbath</dt><dd class="${nb&&nb<=t?'due':''}">${g.bath?fmt(g.bath)+(nb?' · next '+fmt(nb):''):'None recorded'}</dd></dl>
+ <div class="acts"><button class="btn y" data-a="weigh" data-id="${g.id}">Weigh</button><button class="btn" data-a="dose" data-id="${g.id}">Dose</button><button class="btn" data-a="bath" data-id="${g.id}">Footbath</button><button class="btn" data-a="more" data-id="${g.id}">More</button></div></article>`}
+function vFlock(){if(!S.groups.length)return `<div class="card empty" style="margin-top:24px"><h2>No groups yet</h2><p class="mute">Make a group for each weight band, e.g. 30–35 kg, 35–40 kg and 40–45 kg.</p><div class="btns" style="justify-content:center"><button class="btn p" data-a="addg">+ Add your first group</button><button class="btn" data-a="example">Try with example groups</button></div></div>`;
+ const t=today(),all=dueList(),soon=all.filter(x=>days(t,x.d)<=14),later=all.filter(x=>days(t,x.d)>14);
+ return `<div class="row"><h2>Coming up</h2></div><div class="card">${soon.length?`<ul class="jobs">${soon.map(job).join('')}</ul>`:'<p class="mute" style="margin:0">Nothing due in the next 2 weeks.</p>'}${later.length?`<details><summary>Later (${later.length})</summary><ul class="jobs">${later.map(job).join('')}</ul></details>`:''}</div>
+ <div class="row"><h2>Groups</h2><div class="btns"><button class="btn" data-a="dose">Dose groups</button><button class="btn" data-a="bath">Footbath groups</button><button class="btn p" data-a="addg">+ Group</button></div></div>
+ <div class="grid">${S.groups.map(card).join('')}</div>`}
+const doseTxt=p=>p.per>0?`${p.rate} ml per ${p.per} kg`:`${p.rate} ml per lamb`;
+function vDoses(){const recent=S.log.filter(e=>e.type==='dose').sort((a,b)=>a.date<b.date?1:-1).slice(0,30);
+ return `<div class="row"><h2>Dose products</h2><button class="btn p" data-a="addp">+ Add product</button></div>
+ ${S.products.length?`<div class="grid">${S.products.map(p=>`<article class="g"><div class="gh"><b style="font-size:19px">${esc(p.name)}</b><span class="kind">${esc(p.kind||'Other')}</span></div>
+ <dl><dt>Dose rate</dt><dd>${doseTxt(p)}</dd><dt>Meat withdrawal</dt><dd>${p.wd?p.wd+' days':'None'}</dd><dt>Repeat every</dt><dd>${p.every?p.every+' days':'No reminder'}</dd></dl>${p.notes?`<div class="sm mute">${esc(p.notes)}</div>`:''}
+ <div class="btns"><button class="btn" data-a="editp" data-id="${p.id}">Edit</button></div></article>`).join('')}</div>`:'<div class="card mute">Add each wormer, fluke dose, vaccine or mineral drench you use, with its dose rate from the label.</div>'}
+ <div class="row"><h2>Recent doses</h2>${S.groups.length&&S.products.length?'<button class="btn y" data-a="dose">Record a dose</button>':''}</div>
+ ${recent.length?`<div class="card scroll"><table><thead><tr><th>Date</th><th>Group</th><th>Product</th><th class="n">Each</th></tr></thead><tbody>${recent.map(e=>`<tr><td class="n" style="text-align:left">${fmt(e.date)}</td><td>${esc(G(e.gid)?.name||'—')}</td><td>${esc(e.pname)}</td><td class="n">${e.ml?e.ml+' ml':'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="card mute">No doses recorded yet.</div>'}`}
+function vMore(){const pr=S.set.price||0;let tot=0,heads=0;
+ const rows=S.groups.map(g=>{tot+=g.meal||0;heads+=g.count||0;const ph=g.count&&g.meal?g.meal/g.count/7:0;return `<tr><td>${esc(g.name)}</td><td class="n">${g.count||0}</td><td class="n">${g.meal||0}</td><td class="n">${ph?ph.toFixed(2):'—'}</td>${pr?`<td class="n">€${((g.meal||0)/1000*pr).toFixed(2)}</td>`:''}</tr>`}).join('');
+ return `<div class="row"><h2>Meal</h2></div><div class="card">
+ ${S.groups.length?`<div class="scroll"><table><thead><tr><th>Group</th><th class="n">Lambs</th><th class="n">kg/week</th><th class="n">kg/head/day</th>${pr?'<th class="n">€/week</th>':''}</tr></thead><tbody>${rows}</tbody>
+ <tfoot><tr><td>Total</td><td class="n">${heads}</td><td class="n">${tot}</td><td class="n">${heads?(tot/heads/7).toFixed(2):'—'}</td>${pr?`<td class="n">€${(tot/1000*pr).toFixed(2)}</td>`:''}</tr></tfoot></table></div>
+ <p class="sm mute">That's about ${r1(tot*4/1000)} t every 4 weeks. Change each group's meal under More → Edit group.</p>`:'<p class="mute">Add groups first.</p>'}
+ <label class="f" style="max-width:260px">Meal price (€ per tonne)<input id="price" type="number" inputmode="decimal" min="0" value="${pr||''}" placeholder="e.g. 380"></label></div>
+ <div class="row"><h2>Backup</h2></div><div class="card" style="display:grid;gap:10px">
+ <p class="sm mute" style="margin:0">Your records are saved on this phone. Every so often, tap Copy backup and paste it into Notes, so you have a copy if you change phones.</p>
+ <div class="btns"><button class="btn" id="bcopy">Copy backup</button></div>
+ <label class="f">Restore from a backup<textarea id="bin" rows="3" placeholder="Paste backup text here"></textarea></label>
+ <div class="btns"><button class="btn" id="bload">Replace my records with this backup</button><button class="btn d" id="bwipe">Delete all records</button></div></div>`}
+function render(){stats();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+ $('view').innerHTML=tab==='doses'?vDoses():tab==='more'?vMore():vFlock();
+ if(tab==='more'){$('price').onchange=e=>{S.set.price=num(e.target.value);save()};
+  $('bcopy').onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(S));toast('Backup copied')}catch(e){$('bin').value=JSON.stringify(S);$('bin').select();toast('Select and copy the text below')}};
+  arm($('bload'),'Tap again to replace everything',()=>{try{const d=JSON.parse($('bin').value);if(!Array.isArray(d.groups))throw 0;S=Object.assign(blank(),d);save();toast('Backup restored')}catch(e){toast("That text isn't a lamb tracker backup")}});
+  arm($('bwipe'),'Tap again to delete everything',()=>{S=blank();save();toast('All records deleted')})}}
+
+/* ---------- sheets ---------- */
+function sheet(title,html,mount){$('sht').textContent=title;$('shb').innerHTML=html;$('ov').hidden=false;document.body.style.overflow='hidden';$('ov').querySelector('.sh').scrollTop=0;mount&&mount($('shb'))}
+function close(){$('ov').hidden=true;$('shb').innerHTML='';document.body.style.overflow=''}
+$('shx').onclick=close;$('ov').addEventListener('click',e=>{if(e.target.id==='ov')close()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('ov').hidden)close()});
+let tt=0;function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,2600)}
+function arm(btn,label,fn){if(!btn)return;const orig=btn.textContent;btn.onclick=()=>{if(btn.dataset.arm){fn()}else{btn.dataset.arm=1;btn.textContent=label;setTimeout(()=>{delete btn.dataset.arm;btn.textContent=orig},4000)}}}
+const gchecks=sel=>`<fieldset><legend>Groups</legend>${S.groups.map(g=>`<label class="ck"><input type="checkbox" name="g" value="${g.id}" ${sel.includes(g.id)?'checked':''}> ${esc(g.name)} <span class="mute">(${g.count||0})</span></label>`).join('')}</fieldset>`;
+const field=(label,name,val,extra='')=>`<label class="f">${label}<input name="${name}" value="${esc(val??'')}" ${extra}></label>`;
+const numA='type="number" inputmode="decimal" min="0" step="any"';
+
+function groupForm(g){const n=!g;g=g||{bathEvery:28};
+ sheet(n?'Add group':'Edit group',`<form id="gf">
+ ${field('Group name','name',g.name,'required placeholder="e.g. 40–45 kg"')}
+ <div class="two">${field('Number of lambs','count',g.count,numA)}${field('Move on at (kg)','target',g.target||'',numA+' placeholder="e.g. 45"')}</div>
+ <div class="two">${field('Predicted gain (g/day)','dwg',g.dwg?Math.round(g.dwg*1000):'',numA+' placeholder="e.g. 250"')}${field('Meal (kg/week, whole group)','meal',g.meal||'',numA)}</div>
+ ${field('Footbath every (days) <small>Leave blank for no reminder</small>','bathEvery',g.bathEvery||'',numA)}
+ ${n?`<fieldset><legend>Current weight (optional)</legend><div class="two">${field('Most are from (kg)','lo','',numA)}${field('to (kg)','hi','',numA)}</div>${field('Date weighed','wdate',today(),'type="date"')}</fieldset>`:''}
+ <label class="f">Notes<textarea name="notes" rows="2">${esc(g.notes||'')}</textarea></label>
+ <div class="btns"><button class="btn p" type="submit">${n?'Add group':'Save changes'}</button>${n?'':'<button class="btn d" type="button" id="gdel">Delete group</button>'}</div></form>`,b=>{
+ b.querySelector('#gf').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target),o=n?{id:uid()}:g;
+  o.name=String(f.get('name')).trim()||'Group';o.count=Math.round(num(f.get('count')));o.target=num(f.get('target'));o.dwg=num(f.get('dwg'))/1000;o.meal=num(f.get('meal'));o.bathEvery=Math.round(num(f.get('bathEvery')));o.notes=f.get('notes');
+  if(n){S.groups.push(o);recompute(o);let lo=num(f.get('lo')),hi=num(f.get('hi'))||lo;if(!lo)lo=hi;if(lo)addWeigh(o,f.get('wdate')||today(),Math.min(lo,hi),Math.max(lo,hi))}
+  save();close();toast(n?'Group added':'Saved')};
+ if(!n)arm(b.querySelector('#gdel'),'Tap again to delete',()=>{S.groups=S.groups.filter(x=>x!==g);S.log=S.log.filter(x=>x.gid!==g.id);save();close();toast('Group deleted')})})}
+
+function weighForm(g){const prev=g.weighed?{d:g.weighed,a:g.avg}:null;
+ sheet('Weigh '+g.name,`<form id="wf">
+ <div class="seg"><label><input type="radio" name="m" value="r" checked>Weight range</label><label><input type="radio" name="m" value="a">Exact average</label></div>
+ <div class="two" id="wr">${field('Most are from (kg)','lo','',numA+' required')}${field('to (kg)','hi','',numA)}</div>
+ <div id="wa" hidden>${field('Average weight (kg)','av','',numA)}</div>
+ <div class="two">${field('Date weighed','date',today(),'type="date" required')}${field('Lambs in group','count',g.count||'',numA)}</div>
+ <div class="prev" id="wp"></div>
+ <label class="ck" id="wu" hidden><input type="checkbox" name="upd"> Use the actual gain as the new predicted gain</label>
+ <button class="btn p" type="submit">Save weighing</button></form>`,b=>{const f=b.querySelector('#wf');let act=0;
+ const read=()=>{let lo,hi;if(f.m.value==='a'){lo=hi=num(f.av.value)}else{lo=num(f.lo.value);hi=num(f.hi.value)||lo;if(hi<lo)[lo,hi]=[hi,lo]}return{lo,hi,avg:(lo+hi)/2,date:f.date.value||today()}};
+ const upd=()=>{const a=f.m.value==='a';$('wr').hidden=a;$('wa').hidden=!a;f.lo.required=!a;f.av.required=a;const r=read();act=0;
+  let t='Enter the weights. With a range, the group average is the middle of it.';
+  if(r.avg){t=`Group average: <b>${kg(r.avg)}</b>`;
+   if(prev&&r.date>prev.d){const d=days(prev.d,r.date);act=(r.avg-prev.a)/d;t+=`<br>Actual gain since ${fmt(prev.d)}: <b>${Math.round(act*1000)} g/day</b>${g.dwg?` (predicted ${Math.round(g.dwg*1000)})`:''}`}
+   const gain=(f.upd.checked&&act>0)?act:g.dwg;
+   if(g.target&&r.avg>=g.target)t+=`<br>At or above the move-on weight of ${g.target} kg.`;
+   else if(g.target&&gain>0)t+=`<br>Should reach ${g.target} kg around <b>${fmt(addD(r.date,Math.ceil((g.target-r.avg)/gain)))}</b>.`}
+  $('wp').innerHTML=t;$('wu').hidden=!(act>0)};
+ f.addEventListener('input',upd);f.addEventListener('change',upd);upd();
+ f.onsubmit=e=>{e.preventDefault();const r=read();if(!r.avg)return;const c=Math.round(num(f.count.value));if(c)g.count=c;
+  if(f.upd.checked&&act>0)g.dwg=Math.round(act*1000)/1000;addWeigh(g,r.date,r.lo,r.hi,c);save();close();const nw=nextW(g);toast(nw?'Saved · next weigh '+fmt(nw):'Weighing saved')}})}
+
+function doseForm(gids){if(!S.products.length){productForm(null,()=>doseForm(gids));toast('Add a dose product first');return}
+ sheet('Record a dose',`<form id="df">
+ <label class="f">Product<select name="pid">${S.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+ ${gchecks(gids)}
+ ${field('Date dosed','date',today(),'type="date" required')}
+ <div class="prev" id="dp"></div>
+ ${field('Notes','note','','placeholder="Batch number, who dosed…"')}
+ <div class="btns"><button class="btn p" type="submit">Save dose</button><button class="btn" type="button" id="dnew">+ New product</button></div></form>`,b=>{const f=b.querySelector('#df');
+ const upd=()=>{const p=P(f.pid.value),sel=new FormData(f).getAll('g');
+  let h=`${doseTxt(p)}${p.wd?` · ${p.wd}-day withdrawal, until <b>${fmt(addD(f.date.value||today(),p.wd))}</b>`:''}`;
+  for(const id of sel){const g=G(id),w=heavy(g),ml=doseMl(p,w);
+   h+=`<div class="dl"><span>${esc(g.name)}</span><span>${ml?`<b>${ml} ml</b> each${p.per>0?` (heaviest ~${Math.round(w)} kg)`:''} · ${r1(ml*(g.count||0))} ml for ${g.count||0}`:'Weigh this group first'}</span></div>`}
+  if(!sel.length)h+='<div class="dl">Tick at least one group.</div>';$('dp').innerHTML=h};
+ f.addEventListener('change',upd);f.addEventListener('input',upd);upd();
+ b.querySelector('#dnew').onclick=()=>productForm(null,()=>doseForm(new FormData(f).getAll('g')));
+ f.onsubmit=e=>{e.preventDefault();const p=P(f.pid.value),sel=new FormData(f).getAll('g');if(!sel.length){toast('Tick at least one group');return}
+  for(const id of sel){const g=G(id);S.log.push({id:uid(),gid:id,type:'dose',date:f.date.value||today(),pid:p.id,pname:p.name,ml:doseMl(p,heavy(g)),note:f.note.value})}
+  save();close();toast('Dose saved for '+sel.length+(sel.length===1?' group':' groups'))}})}
+
+function bathForm(gids){const lastSol=(S.log.filter(e=>e.type==='bath').sort((a,b)=>a.date<b.date?1:-1)[0]||{}).sol||'';
+ sheet('Record a footbath',`<form id="bf">${gchecks(gids)}
+ ${field('Date','date',today(),'type="date" required')}
+ ${field('Solution','sol',lastSol,'placeholder="e.g. zinc sulphate 10%"')}
+ <button class="btn p" type="submit">Save footbath</button></form>`,b=>{const f=b.querySelector('#bf');
+ f.onsubmit=e=>{e.preventDefault();const sel=new FormData(f).getAll('g');if(!sel.length){toast('Tick at least one group');return}
+  for(const id of sel){S.log.push({id:uid(),gid:id,type:'bath',date:f.date.value||today(),sol:f.sol.value});recompute(G(id))}
+  save();close();toast('Footbath saved')}})}
+
+function productForm(p,after){const n=!p;p=p||{kind:'Wormer'};const kinds=['Wormer','Fluke','Vaccine','Mineral / vitamin','Fly / lice','Antibiotic','Other'];
+ sheet(n?'Add dose product':'Edit product',`<form id="pf">
+ ${field('Product name','name',p.name,'required')}
+ <label class="f">Type<select name="kind">${kinds.map(k=>`<option ${k===p.kind?'selected':''}>${k}</option>`).join('')}</select></label>
+ <div class="two">${field('Dose (ml)','rate',p.rate??'',numA+' required')}${field('per (kg) <small>Blank = per lamb</small>','per',p.per||'',numA+' placeholder="e.g. 10"')}</div>
+ <div class="two">${field('Meat withdrawal (days)','wd',p.wd||'',numA)}${field('Repeat every (days)','every',p.every||'',numA+' placeholder="Blank = no reminder"')}</div>
+ <label class="f">Notes<textarea name="notes" rows="2">${esc(p.notes||'')}</textarea></label>
+ <p class="sm mute" style="margin:0">Take the dose rate and withdrawal from the product label. Doses are worked out for the heaviest lambs in the group and rounded up to the nearest 0.5 ml.</p>
+ <div class="btns"><button class="btn p" type="submit">${n?'Add product':'Save changes'}</button>${n?'':'<button class="btn d" type="button" id="pdel">Delete product</button>'}</div></form>`,b=>{
+ b.querySelector('#pf').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target),o=n?{id:uid()}:p;
+  o.name=String(f.get('name')).trim()||'Product';o.kind=f.get('kind');o.rate=num(f.get('rate'));o.per=num(f.get('per'));o.wd=Math.round(num(f.get('wd')));o.every=Math.round(num(f.get('every')));o.notes=f.get('notes');
+  if(n)S.products.push(o);save();if(after)after();else{close();toast(n?'Product added':'Saved')}};
+ if(!n)arm(b.querySelector('#pdel'),'Tap again to delete',()=>{S.products=S.products.filter(x=>x!==p);save();close();toast('Product deleted')})})}
+
+function moveForm(g){const others=S.groups.filter(x=>x!==g);if(!others.length){toast('Add another group first');return}
+ sheet('Move lambs from '+g.name,`<form id="mf">
+ <div class="two">${field('How many lambs','n','','type="number" inputmode="numeric" min="1" max="'+(g.count||0)+'" required')}<label class="f">Into group<select name="to">${others.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label></div>
+ ${field('Date','date',today(),'type="date"')}
+ <p class="sm mute" style="margin:0">This changes the lamb count in both groups. Weigh the new group again if its average has changed.</p>
+ <button class="btn p" type="submit">Move lambs</button></form>`,b=>{const f=b.querySelector('#mf');
+ f.onsubmit=e=>{e.preventDefault();const n=Math.round(num(f.n.value)),to=G(f.to.value),d=f.date.value||today();if(!n||!to)return;
+  g.count=Math.max(0,(g.count||0)-n);to.count=(to.count||0)+n;
+  S.log.push({id:uid(),gid:g.id,type:'move',date:d,n,other:to.name,dir:'out'},{id:uid(),gid:to.id,type:'move',date:d,n,other:g.name,dir:'in'});
+  save();close();toast(n+' lambs moved to '+to.name)}})}
+
+function line(e){switch(e.type){
+ case'weigh':return`<b>Weighed</b> · ${e.min?e.min+'–'+e.max+' kg (avg '+e.avg+')':'avg '+e.avg+' kg'}${e.count?' · '+e.count+' lambs':''}`;
+ case'dose':return`<b>Dosed</b> · ${esc(e.pname)}${e.ml?' · '+e.ml+' ml each':''}${e.note?' · '+esc(e.note):''}`;
+ case'bath':return`<b>Footbathed</b>${e.sol?' · '+esc(e.sol):''}`;
+ case'move':return e.dir==='out'?`<b>Moved out</b> · ${e.n} lambs to ${esc(e.other)}`:`<b>Moved in</b> · ${e.n} lambs from ${esc(e.other)}`;
+ default:return''}}
+function groupSheet(g){const items=S.log.filter(e=>e.gid===g.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+ sheet(g.name,`<div class="btns"><button class="btn" id="ge">Edit group</button><button class="btn" id="gm">Move lambs</button></div>
+ ${g.notes?`<p class="sm">${esc(g.notes)}</p>`:''}
+ <h3 style="margin:18px 0 4px">History</h3>
+ ${items.length?`<ul class="hist">${items.map(e=>`<li><div><div class="sm mute">${fmt(e.date)}</div><div>${line(e)}</div></div><button class="x" data-del="${e.id}" aria-label="Delete entry">×</button></li>`).join('')}</ul>`:'<p class="mute">Nothing recorded yet.</p>'}`,b=>{
+ b.querySelector('#ge').onclick=()=>groupForm(g);b.querySelector('#gm').onclick=()=>moveForm(g);
+ b.querySelectorAll('[data-del]').forEach(x=>arm(x,'Delete?',()=>{const e=S.log.find(l=>l.id===x.dataset.del);S.log=S.log.filter(l=>l!==e);
+  if(e&&e.type==='move'){const n=e.n||0,o=S.groups.find(q=>q.name===e.other);g.count=Math.max(0,(g.count||0)+(e.dir==='out'?n:-n))}
+  recompute(g);save();groupSheet(g)}))})}
+
+function example(){const t=today(),a=uid(),b=uid(),c=uid(),p1=uid(),p2=uid();
+ S.products=[{id:p1,name:'White drench (example)',kind:'Wormer',rate:2.5,per:10,wd:3,every:28,notes:''},{id:p2,name:'Cobalt + selenium (example)',kind:'Mineral / vitamin',rate:5,per:0,wd:0,every:42,notes:''}];
+ S.groups=[{id:a,name:'30–35 kg',count:46,target:35,dwg:.22,meal:110,bathEvery:28},{id:b,name:'35–40 kg',count:38,target:40,dwg:.25,meal:150,bathEvery:28},{id:c,name:'40–45 kg',count:30,target:45,dwg:.28,meal:190,bathEvery:28}];
+ S.log=[];addWeigh(S.groups[0],addD(t,-10),30,34);addWeigh(S.groups[1],addD(t,-14),36,40);addWeigh(S.groups[2],addD(t,-9),40,45);
+ S.groups.forEach((g,i)=>{S.log.push({id:uid(),gid:g.id,type:'dose',date:addD(t,-20-i*3),pid:p1,pname:S.products[0].name,ml:doseMl(S.products[0],heavy(g)),note:''},{id:uid(),gid:g.id,type:'bath',date:addD(t,-25+i*4),sol:'Zinc sulphate 10%'});recompute(g)});
+ save();toast('Example groups added. Delete them when you add your own.')}
+
+document.addEventListener('click',e=>{const tb=e.target.closest('#tabs button');if(tb){tab=tb.dataset.t;render();scrollTo(0,0);return}
+ const b=e.target.closest('[data-a]');if(!b)return;const id=b.dataset.id,g=id?G(id):null,all=S.groups.map(x=>x.id);
+ const acts={addg:()=>groupForm(),example,weigh:()=>g&&weighForm(g),dose:()=>{if(!S.groups.length){toast('Add a group first');return}doseForm(g?[g.id]:all)},bath:()=>{if(!S.groups.length){toast('Add a group first');return}bathForm(g?[g.id]:all)},more:()=>g&&groupSheet(g),addp:()=>productForm(),editp:()=>{const p=P(id);p&&productForm(p)}};
+ (acts[b.dataset.a]||(()=>{}))()});
+render();
+}</script></body></html>
