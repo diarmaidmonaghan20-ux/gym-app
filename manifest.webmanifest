@@ -1,6 +1,6 @@
 {
-  "name": "Logbook",
-  "short_name": "Logbook",
+  "name": "Gym",
+  "short_name": "Gym",
   "description": "Track lifts, body weight and food.",
   "start_url": "./",
   "scope": "./",
