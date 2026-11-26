@@ -29,7 +29,8 @@ header.top .wrap{display:flex;align-items:center;justify-content:space-between;g
 header.top h1{font-size:36px;font-weight:700;font-style:italic;text-transform:uppercase;letter-spacing:.02em;background:var(--hot);-webkit-background-clip:text;background-clip:text;color:transparent;padding-right:4px}
 .icon-btn{background:var(--card);border:1px solid var(--line);color:var(--ink);width:44px;height:44px;display:grid;place-items:center;border-radius:14px;cursor:pointer}
 .icon-btn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,.btn:focus-within{outline:2px solid var(--red);outline-offset:2px}
-.datebar{position:sticky;top:0;z-index:5;background:rgba(11,12,15,.78);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.05)}
+body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:#0b0c0f;z-index:9}
+.datebar{position:sticky;top:env(safe-area-inset-top);z-index:5;background:rgba(11,12,15,.78);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.05)}
 .datebar .wrap{display:flex;align-items:center;gap:8px;padding-block:8px}
 .datebar .d{flex:1;text-align:center;font-family:"Barlow Condensed",Barlow,sans-serif;font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.03em}
 .chip{border:1px solid var(--line);background:var(--card2);color:var(--ink);border-radius:999px;padding:8px 14px;font:600 15px Barlow,system-ui,sans-serif;min-height:40px;cursor:pointer;transition:transform .12s,background .12s}
@@ -56,13 +57,24 @@ label.f input,label.f select{margin-top:5px;text-transform:none;letter-spacing:0
 .ex-head h3{font-size:23px}
 .x{background:none;border:0;color:var(--mute);width:40px;height:40px;border-radius:12px;font-size:22px;cursor:pointer;flex:none}
 .sets{width:100%;border-collapse:separate;border-spacing:0 6px;margin:8px 0;font-variant-numeric:tabular-nums}
-.sets td{padding:8px 6px;background:var(--soft)}
+.sets td{padding:5px 6px;background:var(--soft)}
 .sets td:first-child{border-radius:12px 0 0 12px}.sets td:last-child{border-radius:0 12px 12px 0}
 .sets td.n{width:2.6em;text-align:center}
 .sets td.n{font-family:"Barlow Condensed",Barlow,sans-serif;font-weight:700;color:var(--red);font-size:18px}
-.sets td.v{font-family:"Barlow Condensed",Barlow,sans-serif;font-weight:700;font-size:22px}
+.sets td.v{font-family:"Barlow Condensed",Barlow,sans-serif;font-weight:700;font-size:20px}
 .sets td.r{text-align:right;width:44px}
-.addset{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end}
+.addset{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,.8fr);gap:8px;align-items:end}
+#v-weight .addset{grid-template-columns:minmax(0,1fr) auto}
+.list-bar{display:flex;justify-content:space-between;align-items:center;margin:0 2px 10px}
+.ex-toggle{flex:1;display:flex;align-items:center;gap:10px;background:none;border:0;color:inherit;text-align:left;padding:0;cursor:pointer;font:inherit;min-height:44px}
+.ex-toggle>span:first-child{flex:1}
+.chev{flex:none;color:var(--mute);transition:transform .2s}.chev.open{transform:rotate(180deg);color:var(--red)}
+.card.mini{padding:6px 14px 6px 16px;margin-bottom:8px;border-radius:16px}
+.mini .ex-toggle{min-height:48px;width:100%}
+.mini .ex-sum{text-align:right}
+.ex-name{flex:1;font-family:"Barlow Condensed",Barlow,sans-serif;font-weight:700;font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ex-sum{font-family:"Barlow Condensed",Barlow,sans-serif;font-weight:600;font-size:17px;color:#cfd2d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+.up{font:700 11px Barlow,system-ui,sans-serif;color:#0b0c0f;background:var(--green);border-radius:6px;padding:1px 5px;vertical-align:3px;margin-left:4px}
 .plate{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:1px}
 .tot{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center}
 .ring{position:relative;width:148px;height:148px}.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
@@ -285,12 +297,19 @@ function renderTrain(){
  const mine=allEx().filter(n=>!PRESET.includes(n)).sort();
  $('exSel').innerHTML='<option value="">Choose exercise…</option>'+(mine.length?`<optgroup label="My exercises">${mine.map(n=>`<option>${esc(n)}</option>`).join('')}</optgroup>`:'')+Object.entries(GROUPS).map(([g,l])=>`<optgroup label="${g}">${l.map(n=>`<option>${esc(n)}</option>`).join('')}</optgroup>`).join('')+'<option value="__custom">+ Add your own…</option>';
  if(!w.length){$('trainList').innerHTML=`<div class="empty">No exercises logged for ${esc(fmt(cur))}.<br>Choose one from the list above to start.</div>`;return}
- $('trainList').innerHTML=w.map((x,i)=>{
+ const allC=w.every(x=>x.c);
+ $('trainList').innerHTML=`<div class="list-bar"><span class="small mute">${w.length} exercise${w.length>1?'s':''}</span><button class="chip" data-act="all">${allC?'Expand all':'Collapse all'}</button></div>`+w.map((x,i)=>{
   const last=lastSession(x.n,cur),lb=last&&best(last.s);
   const ref=x.s[x.s.length-1]||(last&&last.s[0])||{kg:BW.has(x.n)?0:20,r:10};
-  return `<div class="card" data-i="${i}"><div class="ex-head"><div><h3>${esc(x.n)}</h3><div class="small mute">${last?`Last time ${esc(fmt(last.date,{day:'numeric',month:'short'}))}: ${last.s.map(s=>esc(s.kg)+'×'+esc(s.r)).join(', ')}`:'First time logging this'}</div></div><button class="x" data-act="rmEx" aria-label="Remove exercise">×</button></div>
-  ${x.s.length?`<table class="sets">${x.s.map((s,j)=>`<tr><td class="n">${j+1}</td><td class="v">${s.kg?esc(s.kg)+' kg':'Bodyweight'} × ${esc(s.r)}${lb&&e1rm(s)>e1rm(lb)?' <span class="small" style="color:var(--green)">up</span>':''}</td><td class="r"><button class="x" data-act="rmSet" data-j="${j}" aria-label="Delete set">×</button></td></tr>`).join('')}</table>`:''}
-  <div class="addset"><label class="f">Weight<select class="kg">${kgOpts(+ref.kg)}</select></label><label class="f">Reps<select class="reps">${repOpts(+ref.r)}</select></label><button class="btn dark" data-act="addSet">+ Set</button></div></div>`}).join('');
+  const defSets=x.s.length?1:Math.min(5,Math.max(1,last?last.s.length:3));
+  const kgT=k=>k?k+' kg':'BW';
+  const sum=x.s.length?(x.s.every(t=>t.kg===x.s[0].kg&&t.r===x.s[0].r)?`${x.s.length} × ${x.s[0].r} @ ${kgT(x.s[0].kg)}`:x.s.map(t=>(t.kg?t.kg:'BW')+'×'+t.r).join(' · ')):'No sets yet';
+  const pr=lb&&x.s.some(t=>e1rm(t)>e1rm(lb));
+  if(x.c)return `<div class="card ex mini" data-i="${i}"><button class="ex-toggle" data-act="tog" aria-expanded="false" aria-label="Show ${esc(x.n)}"><span class="ex-name">${esc(x.n)}</span><span class="ex-sum">${esc(sum)}${pr?' <b class="up">PR</b>':''}</span><svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button></div>`;
+  return `<div class="card ex" data-i="${i}"><div class="ex-head"><button class="ex-toggle" data-act="tog" aria-expanded="true" aria-label="Hide ${esc(x.n)}"><span><h3>${esc(x.n)}</h3><span class="small mute" style="display:block">${last?`Last time ${esc(fmt(last.date,{day:'numeric',month:'short'}))}: ${last.s.map(s=>esc(s.kg)+'×'+esc(s.r)).join(', ')}`:'First time logging this'}</span></span><svg class="chev open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><button class="x" data-act="rmEx" aria-label="Remove exercise">×</button></div>
+  ${x.s.length?`<table class="sets">${x.s.map((s,j)=>`<tr><td class="n">${j+1}</td><td class="v">${s.kg?esc(s.kg)+' kg':'Bodyweight'} × ${esc(s.r)}${lb&&e1rm(s)>e1rm(lb)?' <b class="up">PR</b>':''}</td><td class="r"><button class="x" data-act="rmSet" data-j="${j}" aria-label="Delete set">×</button></td></tr>`).join('')}</table>`:''}
+  <div class="addset"><label class="f">Weight<select class="kg">${kgOpts(+ref.kg)}</select></label><label class="f">Reps<select class="reps">${repOpts(+ref.r)}</select></label><label class="f">Sets<select class="nsets">${[1,2,3,4,5].map(n=>`<option value="${n}"${n===defSets?' selected':''}>${n}</option>`).join('')}</select></label></div>
+  <div class="row" style="margin-top:10px"><button class="btn dark" data-act="addSet" style="flex:1">+ Add sets</button><button class="btn" data-act="tog" style="flex:0 0 auto">Done</button></div></div>`}).join('');
 }
 /* routines */
 const R=()=>S.profile.routines||(S.profile.routines=[]);
@@ -332,8 +351,11 @@ function addExercise(name){const n=(typeof name==='string'?name:$('exName').valu
  if(!(S.profile.ex||[]).includes(n)){S.profile.ex=[...(S.profile.ex||[]),n];saveProfile()}
  $('exName').value='';saveDay(cur);renderTrain();const cards=$('trainList').querySelectorAll('.card');const c=cards[cards.length-1];if(c){c.scrollIntoView({block:'center'});c.querySelector('[data-act=addSet]').focus()}}
 $('addEx').onclick=()=>addExercise();$('exSel').onchange=()=>{const v=$('exSel').value;$('exSel').value='';if(v==='__custom'){$('customRow').hidden=false;$('exName').focus()}else if(v)addExercise(v)};$('exName').addEventListener('keydown',e=>{if(e.key==='Enter')addExercise()});
-$('trainList').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const card=b.closest('.card'),i=+card.dataset.i,d=day(cur),x=d.w[i];
- if(b.dataset.act==='addSet'){const kg=num(card.querySelector('.kg').value),r=num(card.querySelector('.reps').value);if(kg==null||!r){toast('Pick a weight and reps');return}x.s.push({kg:r1(kg),r:r0(r)});saveDay(cur);renderTrain();const c=$('trainList').querySelectorAll('.card')[i];if(c)c.querySelector('[data-act=addSet]').focus()}
+$('trainList').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const d=day(cur);
+ if(b.dataset.act==='all'){const c=!d.w.every(x=>x.c);d.w.forEach(x=>{x.c=c});saveDay(cur);renderTrain();return}
+ const card=b.closest('.card'),i=+card.dataset.i,x=d.w[i];
+ if(b.dataset.act==='tog'){x.c=!x.c;if(!x.c)delete x.c;saveDay(cur);renderTrain();return}
+ if(b.dataset.act==='addSet'){const kg=num(card.querySelector('.kg').value),r=num(card.querySelector('.reps').value),n=+card.querySelector('.nsets').value||1;if(kg==null||!r){toast('Pick a weight and reps');return}const n0=x.s.length;for(let k=0;k<n;k++)x.s.push({kg:r1(kg),r:r0(r)});saveDay(cur);renderTrain();const ds=cur;toast(`${n} set${n>1?'s':''} added`,()=>{day(ds).w[i].s.splice(n0,n);saveDay(ds);renderAll()});const c=$('trainList').querySelectorAll('.card.ex')[i];if(c)c.querySelector('[data-act=addSet]').focus()}
  if(b.dataset.act==='rmSet'){const j=+b.dataset.j,s=x.s.splice(j,1)[0];saveDay(cur);renderTrain();const ds=cur;toast('Set deleted',()=>{day(ds).w[i].s.splice(j,0,s);saveDay(ds);renderAll()})}
  if(b.dataset.act==='rmEx'){const it=d.w.splice(i,1)[0];saveDay(cur);renderTrain();const ds=cur;toast(it.n+' removed',()=>{day(ds).w.splice(i,0,it);saveDay(ds);renderAll()})}
 });
