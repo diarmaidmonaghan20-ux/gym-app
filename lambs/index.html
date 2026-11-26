@@ -246,12 +246,12 @@ function vSales(){const all=S.log.filter(e=>e.type==='sale').sort((a,b)=>a.date<
  return `<div class="row"><h2>Sales</h2><div class="btns">${yrs.length?`<select id="syr" style="width:auto"><option value="">All years</option>${yrs.map(y=>`<option ${y===saleYr?'selected':''}>${y}</option>`).join('')}</select>`:''}<button class="btn p" data-a="sale">+ Record sale</button></div></div>
  ${L.length?`<div class="sum"><div><span>Lambs sold</span><b>${n}</b></div><div><span>Paid</span><b>€${Math.round(inc).toLocaleString('en-IE')}</b></div><div><span>Per lamb</span><b>€${n?money(inc/n):'—'}</b></div><div><span>Avg carcass</span><b>${cw?r1(cw)+' kg':'—'}</b></div><div><span>Kill-out</span><b>${ko?r1(ko)+'%':'—'}</b></div></div>
  <div class="card" style="margin-top:14px"><table class="stack"><thead><tr><th>Date</th><th>Group · sold to</th><th class="n">Lambs</th><th class="n">Carcass</th><th class="n">€/kg</th><th>Grade</th><th class="n">Paid</th><th></th></tr></thead><tbody>
- ${L.map(e=>`<tr><td class="n" style="text-align:left">${fmt(e.date)}</td><td>${esc(e.gname||'—')} · ${esc(e.where||e.to||'')}</td><td class="n">${e.n}</td><td class="n">${e.cw?r1(e.cw)+' kg':'—'}</td><td class="n">${e.ppk?money(e.ppk):'—'}</td><td>${esc(e.grade||'—')}</td><td class="n">€${money(e.income)}</td><td><button class="x" data-sdel="${e.id}" aria-label="Delete sale">×</button></td></tr>`).join('')}</tbody></table></div>`
+ ${L.map(e=>`<tr><td class="n" style="text-align:left">${fmt(e.date)}</td><td>${esc(e.gname||'—')} · ${esc(e.where||e.to||'')}</td><td class="n">${e.n}</td><td class="n">${e.cw?r1(e.cw)+' kg':'—'}</td><td class="n">${e.ppk?money(e.ppk):'—'}</td><td>${esc(e.grade||'—')}</td><td class="n">€${money(e.income)}</td><td><button class="btn" data-esale="${e.id}">Edit</button></td></tr>`).join('')}</tbody></table></div>`
  :'<div class="card mute">No sales yet. Tap Record sale after lambs go to the factory or mart. You can scan the factory docket to fill in the figures.</div>'}`}
 function render(){stats();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
  $('view').innerHTML=tab==='doses'?vDoses():tab==='sales'?vSales():tab==='more'?vMore():vFlock();
  const sy=$('syr');if(sy)sy.onchange=()=>{saleYr=sy.value;render()};
- document.querySelectorAll('[data-sdel]').forEach(x=>arm(x,'Delete?',()=>delSale(x.dataset.sdel)));
+ document.querySelectorAll('[data-esale]').forEach(x=>x.onclick=()=>{const e=S.log.find(l=>l.id===x.dataset.esale);e&&saleForm(e.gid,e)});
  document.querySelectorAll('[data-ddel]').forEach(x=>arm(x,'Delete?',()=>{const d=S.deliv.find(q=>q.id===x.dataset.ddel);if(!d)return;S.deliv=S.deliv.filter(q=>q!==d);if(S.set.stockDate)S.set.stockKg=Math.max(0,(S.set.stockKg||0)-d.kg);save()}));
  const ld=$('lead');if(ld)ld.onchange=()=>{S.set.lead=Math.round(num(ld.value));save()};
  const pdi=$('pdate');if(pdi)pdi.onchange=()=>{if(pdi.value){predDate=pdi.value;const y=scrollY;render();scrollTo(0,y)}};
@@ -379,8 +379,8 @@ function groupSheet(g){const items=S.log.filter(e=>e.gid===g.id).sort((a,b)=>a.d
  ${g.notes?`<p class="sm">${esc(g.notes)}</p>`:''}
  ${forecast(g)}
  <h3 style="margin:18px 0 4px">History</h3>
- ${items.length?`<ul class="hist">${items.map(e=>`<li><div><div class="sm mute">${fmt(e.date)}</div><div>${line(e)}</div></div><button class="x" data-del="${e.id}" aria-label="Delete entry">×</button></li>`).join('')}</ul>`:'<p class="mute">Nothing recorded yet.</p>'}`,b=>{
- b.querySelector('#ge').onclick=()=>groupForm(g);b.querySelector('#gm').onclick=()=>moveForm(g);b.querySelector('#gs').onclick=()=>saleForm(g.id);
+ ${items.length?`<ul class="hist">${items.map(e=>`<li><div><div class="sm mute">${fmt(e.date)}</div><div>${line(e)}</div></div>${e.type==='sale'?`<button class="btn" data-hsale="${e.id}">Edit</button>`:`<button class="x" data-del="${e.id}" aria-label="Delete entry">×</button>`}</li>`).join('')}</ul>`:'<p class="mute">Nothing recorded yet.</p>'}`,b=>{
+ b.querySelector('#ge').onclick=()=>groupForm(g);b.querySelector('#gm').onclick=()=>moveForm(g);b.querySelector('#gs').onclick=()=>saleForm(g.id);b.querySelectorAll('[data-hsale]').forEach(x=>x.onclick=()=>{const e=S.log.find(l=>l.id===x.dataset.hsale);e&&saleForm(e.gid,e)});
  b.querySelectorAll('[data-del]').forEach(x=>arm(x,'Delete?',()=>{const e=S.log.find(l=>l.id===x.dataset.del);S.log=S.log.filter(l=>l!==e);
   if(e&&e.type==='sale'&&e.ded)g.count=(g.count||0)+(e.n||0);
   if(e&&e.type==='move'){const n=e.n||0,o=S.groups.find(q=>q.name===e.other);g.count=Math.max(0,(g.count||0)+(e.dir==='out'?n:-n))}
@@ -397,26 +397,31 @@ function stockForm(){sheet('Count the bin',`<form id="msf">${field('Meal in the 
  <button class="btn p" type="submit">Save</button></form>`,b=>{const f=b.querySelector('#msf');f.onsubmit=e=>{e.preventDefault();S.set.stockKg=num(f.kg.value);S.set.stockDate=today();save();close();toast('Bin count saved')}})}
 function saleCalc(f){const n=num(f.n.value),cw=num(f.cw.value),lw=num(f.lw.value),ppk=num(f.ppk.value),ph=num(f.ph.value),net=num(f.net.value);
  const gross=ppk&&cw?n*cw*ppk:ph?n*ph:0;return{n,cw,lw,ppk,ph,net,gross,income:net||gross,ko:cw&&lw?cw/lw*100:0}}
-function saleForm(gid){const g=gid?G(gid):null;
- sheet('Record a sale',`<form id="sf">
+function saleForm(gid,old){const o=old||{};if(old)gid=old.gid;const g=gid?G(gid):null,v=k=>o[k]||'';
+ sheet(old?'Edit sale':'Record a sale',`<form id="sf">
  <div class="scanbox"><label class="btn y">Scan factory docket<input type="file" id="dk" accept="image/*" hidden></label><div class="sm mute" id="dkm">Take a photo of the docket, flat, well lit and filling the screen. The figures it can read fill in below. Always check them against the docket.</div></div>
  <label class="f">From group<select name="gid"><option value="">No group</option>${S.groups.map(x=>`<option value="${x.id}" ${x.id===gid?'selected':''}>${esc(x.name)} (${x.count||0})</option>`).join('')}</select></label>
- <label class="ck"><input type="checkbox" name="ded" checked> Take these lambs off the group's count</label>
- <div class="two">${field('Date','date',today(),'type="date" required')}${field('Number of lambs','n','','type="number" inputmode="numeric" min="1" required')}</div>
- <div class="two"><label class="f">Sold to<select name="to"><option>Factory</option><option>Mart</option><option>Private</option></select></label>${field('Name','where','','placeholder="Factory or mart"')}</div>
- <div class="two">${field('Avg live weight (kg)','lw',g&&g.avg?r1(heavy(g)):'',numA)}${field('Avg carcass weight (kg)','cw','',numA)}</div>
- <div class="two">${field('Price (€/kg carcass)','ppk','',numA)}${field('or € per lamb','ph','',numA)}</div>
- <div class="two">${field('Grade','grade','','placeholder="e.g. R3"')}${field('Net paid (€) <small>after deductions</small>','net','',numA)}</div>
+ <label class="ck"><input type="checkbox" name="ded" ${!old||o.ded?'checked':''}> Take these lambs off the group's count</label>
+ <div class="two">${field('Date','date',o.date||today(),'type="date" required')}${field('Number of lambs','n',v('n'),'type="number" inputmode="numeric" min="1" required')}</div>
+ <div class="two"><label class="f">Sold to<select name="to">${['Factory','Mart','Private'].map(x=>`<option ${x===o.to?'selected':''}>${x}</option>`).join('')}</select></label>${field('Name','where',v('where'),'placeholder="Factory or mart"')}</div>
+ <div class="two">${field('Avg live weight (kg)','lw',old?v('lw'):g&&g.avg?r1(heavy(g)):'',numA)}${field('Avg carcass weight (kg)','cw',v('cw'),numA)}</div>
+ <div class="two">${field('Price (€/kg carcass)','ppk',v('ppk'),numA)}${field('or € per lamb','ph',v('ph'),numA)}</div>
+ <div class="two">${field('Grade','grade',v('grade'),'placeholder="e.g. R3"')}${field('Net paid (€) <small>after deductions</small>','net',v('net'),numA)}</div>
  <div class="prev" id="sp"></div>
- ${field('Notes','note','')}
- <button class="btn p" type="submit">Save sale</button></form>`,b=>{const f=b.querySelector('#sf');
+ ${field('Notes','note',v('note'))}
+ <div class="btns"><button class="btn p" type="submit">${old?'Save changes':'Save sale'}</button>${old?'<button class="btn d" type="button" id="sdel">Delete sale</button>':''}</div></form>`,b=>{const f=b.querySelector('#sf');
  const upd=()=>{const c=saleCalc(f);const bits=[];if(c.gross)bits.push('Gross €'+money(c.gross));if(c.net)bits.push('Net €'+money(c.net));if(c.income&&c.n)bits.push('<b>€'+money(c.income/c.n)+' per lamb</b>');if(c.ko)bits.push('Kill-out '+r1(c.ko)+'%');
   if(c.gross&&c.net&&c.gross>c.net)bits.push('Deductions €'+money(c.gross-c.net));$('sp').innerHTML=bits.length?bits.join(' · '):'Fill in the weights and price to see the totals.'};
  f.addEventListener('input',upd);f.addEventListener('change',e=>{if(e.target.name==='gid'){const x=G(f.gid.value);if(x&&x.avg&&!f.lw.value)f.lw.value=r1(heavy(x))}upd()});upd();
  b.querySelector('#dk').onchange=e=>{const file=e.target.files&&e.target.files[0];if(file)readDocket(file,f,upd);e.target.value=''};
- f.onsubmit=e=>{e.preventDefault();const c=saleCalc(f);if(!c.n)return;const x=G(f.gid.value),ded=!!(x&&f.ded.checked);if(ded)x.count=Math.max(0,(x.count||0)-c.n);
-  S.log.push({id:uid(),gid:x?x.id:'',gname:x?x.name:'',type:'sale',date:f.date.value||today(),n:c.n,to:f.to.value,where:f.where.value.trim(),lw:c.lw,cw:c.cw,ppk:c.ppk,ph:c.ph,net:c.net,gross:r1(c.gross*10)/10,income:Math.round(c.income*100)/100,grade:f.grade.value.trim(),note:f.note.value,ded});
-  save();close();toast('Sale saved'+(ded?` · ${x.count} left in ${x.name}`:''))}})}
+ f.onsubmit=e=>{e.preventDefault();const c=saleCalc(f);if(!c.n)return;
+  if(old){const og=G(old.gid);if(og&&old.ded)og.count=(og.count||0)+(old.n||0)}
+  const x=G(f.gid.value),ded=!!(x&&f.ded.checked);if(ded)x.count=Math.max(0,(x.count||0)-c.n);
+  const rec=old||{id:uid(),type:'sale'};
+  Object.assign(rec,{gid:x?x.id:'',gname:x?x.name:'',date:f.date.value||today(),n:c.n,to:f.to.value,where:f.where.value.trim(),lw:c.lw,cw:c.cw,ppk:c.ppk,ph:c.ph,net:c.net,gross:Math.round(c.gross*100)/100,income:Math.round(c.income*100)/100,grade:f.grade.value.trim(),note:f.note.value,ded});
+  if(!old)S.log.push(rec);
+  save();close();toast((old?'Sale updated':'Sale saved')+(ded?` · ${x.count} left in ${x.name}`:''))};
+ if(old)arm(b.querySelector('#sdel'),'Tap again to delete',()=>{close();delSale(old.id)})})}
 
 /* factory docket reader (runs on the phone, same reader as the Gym app) */
 let ocrW=null,ocrLoading=null;
