@@ -68,6 +68,13 @@ dt{color:var(--mute)}dd{margin:0;text-align:right}
 .late .when,.late .when small{color:var(--red)}
 summary{cursor:pointer;font-weight:600;padding:10px 0;min-height:44px}
 .mute{color:var(--mute)}.sm{font-size:14px}
+.proj{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.proj div{background:var(--soft);border-radius:10px;padding:8px 10px}
+.proj b{display:block;font:700 22px/1.1 'Barlow Condensed',Barlow,sans-serif}
+.proj span{font-size:13px;color:var(--mute)}
+.pd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.pd input{width:auto}
+.hit td{font-weight:700;color:var(--bar)}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:10}
 .sh{background:var(--card);width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:0 18px max(22px,env(safe-area-inset-bottom))}
 @media(min-width:700px){.ov{align-items:center}.sh{border-radius:18px}}
@@ -137,6 +144,9 @@ if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceW
 /* ---------- maths ---------- */
 const since=g=>g.weighed?Math.max(0,days(g.weighed,today())):0;
 const est=g=>g.avg?g.avg+(g.dwg||0)*since(g):0;
+const at=(g,d)=>g.avg?g.avg+(g.dwg||0)*Math.max(0,days(g.weighed||today(),d)):0;
+const rangeAt=(g,d)=>{if(!g.min)return '';const k=(g.dwg||0)*Math.max(0,days(g.weighed||today(),d));return r1(g.min+k)+'–'+r1(g.max+k)+' kg'};
+let predDate='';
 const heavy=g=>{const t=g.max||g.avg;return t?t+(g.dwg||0)*since(g):0};
 function nextW(g){if(!g.avg||!g.target)return null;if(g.avg>=g.target)return g.weighed||today();if(!g.dwg)return null;return addD(g.weighed||today(),Math.ceil((g.target-g.avg)/g.dwg))}
 function lastOf(gid,type,pid){let b=null;for(const e of S.log)if(e.gid===gid&&e.type===type&&(!pid||e.pid===pid)&&(!b||e.date>=b.date))b=e;return b}
@@ -161,7 +171,9 @@ function card(g){const e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf
  const nb=g.bath&&g.bathEvery>0?addD(g.bath,g.bathEvery):'';
  return `<article class="g"><div class="gh"><span class="tag">${esc(g.name)}</span><span class="cnt">${g.count||0} lambs</span></div>
  <div class="wt"><div><b class="big">${e?r1(e):'—'}</b> <span>kg est. today</span></div>${g.target?`<div class="mute">Move on at <b>${g.target} kg</b></div>`:''}</div>
+ ${g.min&&g.dwg?`<div class="sm mute" style="margin-top:-6px">Most lambs ~${rangeAt(g,t)} today</div>`:''}
  <div class="bar" title="${Math.round(pct)}% of move-on weight"><i style="width:${pct}%"></i></div>
+ ${e&&g.dwg?`<div class="proj">${[7,14,28].map(n=>{const d=addD(t,n);return `<div><span>${n===28?'4 weeks':n/7+(n===7?' week':' weeks')}</span><b>${r1(at(g,d))} kg</b><span>${fmt(d)}</span></div>`}).join('')}</div>`:''}
  ${wd?`<div><span class="chip">In withdrawal until ${fmt(wd.end)}</span></div>`:''}
  <dl><dt>Last weighed</dt><dd>${g.weighed?fmt(g.weighed)+' · '+(g.min?g.min+'–'+g.max+' kg':kg(g.avg)):'Not yet'}</dd>
  <dt>Daily gain</dt><dd>${g.dwg?Math.round(g.dwg*1000)+' g/day predicted':'Not set'}</dd>
@@ -173,8 +185,13 @@ function card(g){const e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf
 function vFlock(){if(!S.groups.length)return `<div class="card empty" style="margin-top:24px"><h2>No groups yet</h2><p class="mute">Make a group for each weight band, e.g. 30–35 kg, 35–40 kg and 40–45 kg.</p><div class="btns" style="justify-content:center"><button class="btn p" data-a="addg">+ Add your first group</button><button class="btn" data-a="example">Try with example groups</button></div></div>`;
  const t=today(),all=dueList(),soon=all.filter(x=>days(t,x.d)<=14),later=all.filter(x=>days(t,x.d)>14);
  return `<div class="row"><h2>Coming up</h2></div><div class="card">${soon.length?`<ul class="jobs">${soon.map(job).join('')}</ul>`:'<p class="mute" style="margin:0">Nothing due in the next 2 weeks.</p>'}${later.length?`<details><summary>Later (${later.length})</summary><ul class="jobs">${later.map(job).join('')}</ul></details>`:''}</div>
+ <div class="row"><h2>Predicted weights</h2></div><div class="card">${predCard()}</div>
  <div class="row"><h2>Groups</h2><div class="btns"><button class="btn" data-a="dose">Dose groups</button><button class="btn" data-a="bath">Footbath groups</button><button class="btn p" data-a="addg">+ Group</button></div></div>
  <div class="grid">${S.groups.map(card).join('')}</div>`}
+function predCard(){const t=today();if(!predDate||predDate<t)predDate=addD(t,14);const gs=S.groups.filter(g=>g.avg);
+ return `<label class="pd"><b>Weights on</b><input type="date" id="pdate" value="${predDate}" min="${t}"><span class="mute sm">${rel(days(t,predDate))}</span></label>
+ ${gs.length?`<div class="scroll"><table><thead><tr><th>Group</th><th class="n">Average</th><th class="n">Most lambs</th><th class="n">vs move-on</th></tr></thead><tbody>${gs.map(g=>{const w=at(g,predDate);return `<tr><td>${esc(g.name)}</td><td class="n"><b>${r1(w)} kg</b></td><td class="n">${rangeAt(g,predDate)||'—'}</td><td class="n">${g.target?(w>=g.target?'Ready':r1(g.target-w)+' kg to go'):'—'}</td></tr>`}).join('')}</tbody></table></div>
+ <p class="sm mute" style="margin:8px 0 0">Based on each group's last weighing and its predicted daily gain.</p>`:'<p class="mute" style="margin:0">Weigh a group to see predictions.</p>'}`}
 const doseTxt=p=>p.per>0?`${p.rate} ml per ${p.per} kg`:`${p.rate} ml per lamb`;
 function vDoses(){const recent=S.log.filter(e=>e.type==='dose').sort((a,b)=>a.date<b.date?1:-1).slice(0,30);
  return `<div class="row"><h2>Dose products</h2><button class="btn p" data-a="addp">+ Add product</button></div>
@@ -197,6 +214,7 @@ function vMore(){const pr=S.set.price||0;let tot=0,heads=0;
  <div class="btns"><button class="btn" id="bload">Replace my records with this backup</button><button class="btn d" id="bwipe">Delete all records</button></div></div>`}
 function render(){stats();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
  $('view').innerHTML=tab==='doses'?vDoses():tab==='more'?vMore():vFlock();
+ const pdi=$('pdate');if(pdi)pdi.onchange=()=>{if(pdi.value){predDate=pdi.value;const y=scrollY;render();scrollTo(0,y)}};
  if(tab==='more'){$('price').onchange=e=>{S.set.price=num(e.target.value);save()};
   $('bcopy').onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(S));toast('Backup copied')}catch(e){$('bin').value=JSON.stringify(S);$('bin').select();toast('Select and copy the text below')}};
   arm($('bload'),'Tap again to replace everything',()=>{try{const d=JSON.parse($('bin').value);if(!Array.isArray(d.groups))throw 0;S=Object.assign(blank(),d);save();toast('Backup restored')}catch(e){toast("That text isn't a lamb tracker backup")}});
@@ -309,9 +327,16 @@ function line(e){switch(e.type){
  case'bath':return`<b>Footbathed</b>${e.sol?' · '+esc(e.sol):''}`;
  case'move':return e.dir==='out'?`<b>Moved out</b> · ${e.n} lambs to ${esc(e.other)}`:`<b>Moved in</b> · ${e.n} lambs from ${esc(e.other)}`;
  default:return''}}
+function forecast(g){if(!g.avg||!g.dwg)return '<p class="sm mute">Weigh the group and set a predicted daily gain to see a forecast.</p>';
+ const t=today(),rows=[];let hit=false;
+ for(let w=0;w<=16;w++){const d=addD(t,w*7),kgs=at(g,d),h=!hit&&g.target&&kgs>=g.target;if(h)hit=true;
+  rows.push(`<tr class="${h?'hit':''}"><td>${w?fmt(d):'Today'}</td><td class="n">${r1(kgs)} kg</td><td class="n">${rangeAt(g,d)||'—'}</td></tr>`);if(hit||(!g.target&&w>=8))break}
+ return `<h3 style="margin:18px 0 4px">Predicted weights</h3><p class="sm mute" style="margin:0 0 6px">At ${Math.round(g.dwg*1000)} g/day from ${fmt(g.weighed)}${g.target?` · move on at ${g.target} kg`:''}</p>
+ <div class="scroll"><table><thead><tr><th>Week</th><th class="n">Average</th><th class="n">Most lambs</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`}
 function groupSheet(g){const items=S.log.filter(e=>e.gid===g.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
  sheet(g.name,`<div class="btns"><button class="btn" id="ge">Edit group</button><button class="btn" id="gm">Move lambs</button></div>
  ${g.notes?`<p class="sm">${esc(g.notes)}</p>`:''}
+ ${forecast(g)}
  <h3 style="margin:18px 0 4px">History</h3>
  ${items.length?`<ul class="hist">${items.map(e=>`<li><div><div class="sm mute">${fmt(e.date)}</div><div>${line(e)}</div></div><button class="x" data-del="${e.id}" aria-label="Delete entry">×</button></li>`).join('')}</ul>`:'<p class="mute">Nothing recorded yet.</p>'}`,b=>{
  b.querySelector('#ge').onclick=()=>groupForm(g);b.querySelector('#gm').onclick=()=>moveForm(g);
