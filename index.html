@@ -227,6 +227,7 @@ const KGS=[0,...Array.from({length:20},(_,i)=>i+1),...Array.from({length:112},(_
 const kgOpts=v=>{const l=KGS.includes(v)?KGS:[...KGS,v].sort((a,b)=>a-b);return l.map(k=>`<option value="${k}"${k===v?' selected':''}>${k===0?'Bodyweight':k+' kg'}</option>`).join('')};
 const repOpts=v=>Array.from({length:30},(_,i)=>i+1).concat(v>30?[v]:[]).map(r=>`<option value="${r}"${r===v?' selected':''}>${r} rep${r>1?'s':''}</option>`).join('');
 const LS='logbook-v1';
+const APP_VERSION='7';
 const S={profile:{goals:{kcal:2500,p:150,c:250,f:80},foods:{},ex:[]},days:{}};
 let cur=today(), view='train', mode='local', col=null, lastSnap='';
 
@@ -272,7 +273,7 @@ let undoFn=null,toastT;
 function toast(msg,undo){$('toastMsg').textContent=msg;undoFn=undo||null;$('toastUndo').hidden=!undo;$('toast').hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{$('toast').hidden=true;undoFn=null},undo?6000:2600)}
 $('toastUndo').onclick=()=>{if(undoFn)undoFn();undoFn=null;$('toast').hidden=true};
 function openSheet(html){$("toast").hidden=true;$('sheetBody').innerHTML=html;$('sheet').hidden=false;const f=$('sheetBody').querySelector('[autofocus]');if(f)setTimeout(()=>f.focus(),60)}
-function closeSheet(){stopScan();$('sheet').hidden=true;$('sheetBody').innerHTML=''}
+function closeSheet(){stopScan();$('sheet').hidden=true;$('sheetBody').innerHTML='';if(typeof updPending!=='undefined'&&updPending)location.reload()}
 $('sheet').addEventListener('click',e=>{if(e.target.id==='sheet'||e.target.closest('[data-close]'))closeSheet()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('sheet').hidden)closeSheet()});
 
@@ -628,7 +629,7 @@ $('setBtn').onclick=()=>{const g=G();
  <div class="row"><input id="uKey" placeholder="Paste USDA API key" value="${esc(S.profile.usdaKey||'')}" autocomplete="off" style="flex:1 1 180px"><button class="btn" id="uSave">Save key</button></div>
  <h3 style="margin-top:22px">Backup</h3><p class="small mute">${mode==='db'?'Your log is saved to your Claude account and syncs across your devices.':'Your log is saved on this device only.'} You can also copy everything as a backup, or paste a backup to restore it.</p>
  <div class="grid2"><button class="btn" id="bCopy">Copy backup</button><button class="btn" id="bShow">Restore backup</button></div><div id="bArea"></div>
- <button class="btn block" data-close style="margin-top:10px">Close</button>`);
+ <button class="btn block" data-close style="margin-top:10px">Close</button><p class="small mute" style="text-align:center;margin:14px 0 0">Gym version ${APP_VERSION}</p>`);
  $('gSave').onclick=()=>{S.profile.goals={kcal:num($('gk').value)||g.kcal,p:num($('gp').value)??g.p,c:num($('gc').value)??g.c,f:num($('gf').value)??g.f};saveProfile();closeSheet();renderAll();toast('Goals saved')};
  $('uSave').onclick=()=>{S.profile.usdaKey=$('uKey').value.trim();saveProfile();toast('Key saved')};
  $('bCopy').onclick=async()=>{const txt=JSON.stringify(S);try{await navigator.clipboard.writeText(txt);toast('Backup copied')}catch(e){$('bArea').innerHTML='<p class="small mute">Copy this text:</p><textarea readonly></textarea>';$('bArea').querySelector('textarea').value=txt}};
@@ -644,7 +645,17 @@ function renderAll(){
 const ro=new ResizeObserver(()=>{if(view==='prog')drawProg();if(view==='weight')drawWeight()});ro.observe($('progSvg'));ro.observe($('bwSvg'));
 loadLocal();renderAll();initDb();
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
-if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+/* updates: check for a new version whenever the app is opened, and reload into it */
+let updPending=false;
+if('serviceWorker' in navigator&&location.protocol==='https:'){
+ const hadCtl=!!navigator.serviceWorker.controller;
+ navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{
+  const chk=()=>reg.update().catch(()=>{});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')chk()});
+  setInterval(chk,30*60*1000);
+ }).catch(()=>{});
+ navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!hadCtl||updPending)return;updPending=true;if($('sheet').hidden)location.reload()});
+}
 }
 </script>
 </body>
