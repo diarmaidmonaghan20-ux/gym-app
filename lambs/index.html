@@ -125,16 +125,89 @@ table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:9px 6px;b
 @media(prefers-reduced-motion:no-preference){.bar i{transition:width .5s}}
 </style><script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script></head><body>
 <header class="top"><div class="wrap">
- <div class="brand"><h1>Lamb tracker</h1><span class="sync">Saved on this phone</span></div>
+ <div class="brand"><h1>Lamb tracker</h1><span class="sync" id="sync">Saved on this phone</span></div>
  <div class="stats" id="stats"></div>
  <nav class="tabs" id="tabs"><button data-t="flock" class="on">Groups</button><button data-t="doses">Doses</button><button data-t="sales">Sales</button><button data-t="more">Meal &amp; backup</button></nav>
 </div></header>
 <main class="wrap" id="view"></main>
 <div id="ov" class="ov" hidden><div class="sh" role="dialog" aria-modal="true" aria-labelledby="sht"><div class="shh"><h2 id="sht"></h2><button class="x" id="shx" aria-label="Close">×</button></div><div id="shb"></div></div></div>
 <div id="toast" class="toast" hidden></div>
+<script type="text/plain" id="gscode">
+// Lamb tracker sync. Paste this into Extensions > Apps Script in your Google Sheet, then Deploy > New deployment > Web app
+// (Execute as: Me, Who has access: Anyone). Keep the web app address private: anyone with it can read and change your records.
+const DATA = 'LambData';
+
+function doGet() {
+  return out_({ ok: true, state: load_() });
+}
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const inc = JSON.parse(e.postData.contents || '{}');
+    const merged = merge_(load_(), inc.state || {});
+    store_(merged);
+    summary_(merged);
+    return out_({ ok: true, state: merged });
+  } catch (err) {
+    return out_({ ok: false, error: String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function merge_(a, b) {
+  a = a || {}; b = b || {};
+  const out = {}, dead = {};
+  [a.dead || {}, b.dead || {}].forEach(d => { for (const k in d) dead[k] = Math.max(dead[k] || 0, d[k]); });
+  ['groups', 'products', 'log', 'deliv'].forEach(k => {
+    const m = new Map();
+    (a[k] || []).forEach(r => m.set(r.id, r));
+    (b[k] || []).forEach(r => { const o = m.get(r.id); if (!o || (r.u || 0) >= (o.u || 0)) m.set(r.id, r); });
+    out[k] = [...m.values()].filter(r => !(dead[r.id] >= (r.u || 0)));
+  });
+  const sa = a.setU || 0, sb = b.setU || 0;
+  out.set = sb >= sa ? (b.set || a.set || {}) : a.set;
+  out.setU = Math.max(sa, sb);
+  out.dead = dead;
+  out.updated = Date.now();
+  return out;
+}
+
+function sheet_(name) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+
+function load_() {
+  const sh = sheet_(DATA), n = sh.getLastRow();
+  if (!n) return null;
+  const txt = sh.getRange(1, 1, n, 1).getValues().map(r => String(r[0]).slice(1)).join('');
+  return txt ? JSON.parse(txt) : null;
+}
+
+function store_(o) {
+  const sh = sheet_(DATA), s = JSON.stringify(o), parts = [];
+  for (let i = 0; i < s.length; i += 40000) parts.push(['~' + s.slice(i, i + 40000)]);
+  sh.clear();
+  if (parts.length) sh.getRange(1, 1, parts.length, 1).setValues(parts);
+}
+
+function summary_(o) {
+  const sh = sheet_('Groups'), rows = [['Group', 'Lambs', 'Average kg', 'Last weighed', 'Move on at kg', 'Meal kg/week']];
+  (o.groups || []).forEach(g => rows.push([g.name || '', g.count || 0, g.avg || '', g.weighed || '', g.target || '', g.meal || '']));
+  sh.clear();
+  sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+function out_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+</script>
 <script>{
 const KEY='lambtracker.v1';
-const blank=()=>({groups:[],products:[],log:[],deliv:[],set:{price:0,lead:7},updated:0});
+const blank=()=>({groups:[],products:[],log:[],deliv:[],set:{price:0,lead:7},setU:0,dead:{},updated:0});
 let S=blank(),tab='flock';
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(blank(),JSON.parse(r))}catch(e){}
 const $=id=>document.getElementById(id);
@@ -154,7 +227,31 @@ const G=id=>S.groups.find(g=>g.id===id);
 const P=id=>S.products.find(p=>p.id===id);
 
 /* ---------- saving: on this phone ---------- */
-function save(){S.updated=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save. Is the phone storage full?')}render()}
+/* ---------- sync between phones through the farm's Google Sheet ---------- */
+const KEYS=['groups','products','log','deliv'],SK='lambtracker.sync';
+let SY={},snap={},seq=0,syncing=false,again=false,pending=null,stT=0;
+try{SY=JSON.parse(localStorage.getItem(SK)||'{}')||{}}catch(e){}
+const storeSY=()=>{try{localStorage.setItem(SK,JSON.stringify(SY))}catch(e){}};
+const recJ=r=>JSON.stringify({...r,u:0});
+function takeSnap(){snap={};for(const k of KEYS)for(const r of S[k]||[])snap[r.id]=recJ(r);snap._set=JSON.stringify(S.set)}
+function stamp(){const now=Date.now(),seen={};S.dead=S.dead||{};
+ for(const k of KEYS)for(const r of S[k]||[]){seen[r.id]=1;const j=recJ(r);if(snap[r.id]!==j){r.u=now;snap[r.id]=j}}
+ for(const id in snap)if(id!=='_set'&&!seen[id]){S.dead[id]=now;delete snap[id]}
+ const sj=JSON.stringify(S.set);if(snap._set!==sj){S.setU=now;snap._set=sj}}
+const hhmm=t=>new Date(t).toLocaleTimeString('en-IE',{hour:'2-digit',minute:'2-digit'});
+function syncLabel(){const el=$('sync');if(!el)return;if(!SY.url){el.textContent='Saved on this phone';return}
+ el.textContent=syncing?'Syncing…':SY.err?'Not synced yet · will retry':SY.last?'Synced '+(days(new Date(SY.last).toISOString().slice(0,10),today())?fmt(new Date(SY.last).toISOString().slice(0,10)):hhmm(SY.last)):'Sync on'}
+function applyRemote(st){if(!st)return;if(!$('ov').hidden){pending=st;return}pending=null;
+ const n=Object.assign(blank(),st);if(JSON.stringify(n)===JSON.stringify(S))return;
+ S=n;takeSnap();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}const y=scrollY;render();scrollTo(0,y)}
+async function sync(){if(!SY.url)return;if(syncing){again=true;return}syncing=true;syncLabel();const my=seq;
+ try{const r=await fetch(SY.url,{method:'POST',body:JSON.stringify({state:S})});const j=await r.json();if(!j||!j.ok)throw new Error(j&&j.error||'No answer');
+  if(seq===my)applyRemote(j.state);else again=true;SY.last=Date.now();SY.err=0}
+ catch(e){SY.err=1}
+ syncing=false;storeSY();syncLabel();if(again){again=false;setTimeout(sync,400)}}
+function save(){stamp();S.updated=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save. Is the phone storage full?')}
+ seq++;pending=null;render();syncLabel();if(SY.url){clearTimeout(stT);stT=setTimeout(sync,1200)}}
+takeSnap();
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(()=>{});
 
@@ -259,6 +356,14 @@ function vMore(){const pr=S.set.price||0,u=usage(),sn=stockNow(),ro=runOut(),lea
  <tfoot><tr><td>Total</td><td class="n">${heads}</td><td class="n">${tot}</td><td class="n">${heads?(tot/heads/7).toFixed(2):'—'}</td><td></td><td></td><td></td><td class="n">${pr?'€'+money(tot/1000*pr):'—'}</td></tr></tfoot></table></div>
  <p class="sm mute">Gain is the actual gain between the group's last two weighings${anyPred?'. * means the predicted gain is used, until the group has been weighed twice':''}. This is meal cost only, not grass, doses or other costs, and moving lambs between weighings will throw it off. About ${r1(tot*4/1000)} t is used every 4 weeks.</p>`:'<p class="mute">Add groups first.</p>'}
  <label class="f" style="max-width:260px">Meal price (€ per tonne)<input id="price" type="number" inputmode="decimal" min="0" value="${pr||''}" placeholder="e.g. 380"></label></div>
+ <div class="row"><h2>Sync between phones</h2></div><div class="card" style="display:grid;gap:10px">
+ ${SY.url?`<p style="margin:0"><b>Connected.</b> ${SY.last?'Last synced '+fmt(new Date(SY.last).toISOString().slice(0,10))+' at '+hhmm(SY.last)+'.':'Not synced yet.'}${SY.err?' <span class="due">The last try failed (no signal?). It will try again.</span>':''}</p>
+ <p class="sm mute" style="margin:0">Changes from any phone show on the others within a minute or so of opening the app.</p>
+ <div class="btns"><button class="btn p" id="snow">Sync now</button><button class="btn" id="scopy">Copy sync address</button><button class="btn d" id="soff">Disconnect this phone</button></div>`
+ :`<p class="sm mute" style="margin:0">Share records between up to a few phones through a Google Sheet you own. Set it up once, then paste the sync address on each phone.</p>
+ <label class="f">Sync address<input id="surl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+ <div class="btns"><button class="btn p" id="scon">Connect</button><button class="btn" id="scode">Copy setup code</button></div>
+ <div id="smsg" class="sm"></div>`}</div>
  <div class="row"><h2>Backup</h2></div><div class="card" style="display:grid;gap:10px">
  <p class="sm mute" style="margin:0">Your records are saved on this phone. Every so often, tap Copy backup and paste it into Notes, so you have a copy if you change phones.</p>
  <div class="btns"><button class="btn" id="bcopy">Copy backup</button></div>
@@ -285,11 +390,26 @@ function render(){stats();document.querySelectorAll('#tabs button').forEach(b=>b
  if(tab==='more'){$('price').onchange=e=>{S.set.price=num(e.target.value);save()};
   $('bcopy').onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(S));toast('Backup copied')}catch(e){$('bin').value=JSON.stringify(S);$('bin').select();toast('Select and copy the text below')}};
   arm($('bload'),'Tap again to replace everything',()=>{try{const d=JSON.parse($('bin').value);if(!Array.isArray(d.groups))throw 0;S=Object.assign(blank(),d);save();toast('Backup restored')}catch(e){toast("That text isn't a lamb tracker backup")}});
-  arm($('bwipe'),'Tap again to delete everything',()=>{S=blank();save();toast('All records deleted')})}}
+  arm($('bwipe'),'Tap again to delete everything',()=>{S=blank();save();toast('All records deleted')});
+  bindSync()}}
+function bindSync(){const q=id=>$(id);
+ if(q('snow'))q('snow').onclick=()=>{sync().then(()=>{render();toast(SY.err?'Couldn\'t reach the sheet. Check your signal.':'Synced')})};
+ if(q('scopy'))q('scopy').onclick=async()=>{try{await navigator.clipboard.writeText(SY.url);toast('Sync address copied. Send it to the others.')}catch(e){toast(SY.url)}};
+ if(q('soff'))arm(q('soff'),'Tap again to disconnect',()=>{SY={};storeSY();syncLabel();render();toast('This phone no longer syncs. Its records stay on it.')});
+ if(q('scode'))q('scode').onclick=async()=>{try{await navigator.clipboard.writeText($('gscode').textContent.trim());toast('Setup code copied')}catch(e){toast('Couldn\'t copy. Open the setup page instead.')}};
+ if(q('scon'))q('scon').onclick=async()=>{const url=q('surl').value.trim(),m=t=>{q('smsg').innerHTML=t};
+  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)){m('<span class="due">That doesn\'t look like the address from Google. It starts with https://script.google.com/macros/</span>');return}
+  m('Connecting…');let j;try{const r=await fetch(url);j=await r.json();if(!j||!j.ok)throw 0}catch(e){m('<span class="due">Couldn\'t reach it. Check the address, that the deployment is set to Anyone, and that you have signal.</span>');return}
+  const rs=j.state,remoteHas=!!(rs&&((rs.groups||[]).length||(rs.log||[]).length)),localHas=!!(S.groups.length||S.log.length);
+  const go=async how=>{if(how==='take'){S=Object.assign(blank(),rs);takeSnap();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+   SY={url};storeSY();await sync();render();toast(how==='take'?'Connected · shared records loaded':'Connected · records synced')};
+  if(remoteHas&&localHas){m(`The sheet already has records (${(rs.groups||[]).length} groups), and so does this phone. <div class="btns" style="margin-top:8px"><button class="btn p" id="stake">Use the shared records</button><button class="btn" id="smerge">Combine both</button></div><span class="mute">Use the shared records unless this phone has records the others don't.</span>`);
+   q('stake').onclick=()=>go('take');q('smerge').onclick=()=>go('merge')}
+  else go(remoteHas?'take':'merge')}}
 
 /* ---------- sheets ---------- */
 function sheet(title,html,mount){$('sht').textContent=title;$('shb').innerHTML=html;$('ov').hidden=false;document.body.style.overflow='hidden';$('ov').querySelector('.sh').scrollTop=0;mount&&mount($('shb'))}
-function close(){$('ov').hidden=true;$('shb').innerHTML='';document.body.style.overflow=''}
+function close(){$('ov').hidden=true;$('shb').innerHTML='';document.body.style.overflow='';if(pending){const p=pending;pending=null;applyRemote(p)}}
 $('shx').onclick=close;$('ov').addEventListener('click',e=>{if(e.target.id==='ov')close()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('ov').hidden)close()});
 let tt=0;function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,2600)}
@@ -535,7 +655,9 @@ document.addEventListener('click',e=>{const tb=e.target.closest('#tabs button');
 render();
 /* keep the daily figures (meal left, estimated weights, due dates) current while the app stays open */
 let lastDay=today();
-const refresh=()=>{if(!$('ov').hidden)return;lastDay=today();const y=scrollY;render();scrollTo(0,y)};
+const refresh=()=>{if(SY.url)sync();if(!$('ov').hidden)return;lastDay=today();const y=scrollY;render();scrollTo(0,y)};
+setInterval(()=>{if(SY.url&&!document.hidden&&$('ov').hidden)sync()},45000);
+syncLabel();if(SY.url)sync();
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
 addEventListener('pageshow',refresh);
 setInterval(()=>{if(today()!==lastDay)refresh()},60000);
