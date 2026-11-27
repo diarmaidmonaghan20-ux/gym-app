@@ -82,6 +82,8 @@ summary{cursor:pointer;font-weight:600;padding:10px 0;min-height:44px}
 .tb.ext{color:var(--mute);border-style:dashed;font-weight:600;font-size:14px}
 .tb:active{transform:scale(.95)}
 .tbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip.rdy{background:var(--tag);color:#1a1a1a}
+.ready{border:2px solid var(--tag)}
 .tot{font:700 22px/1.1 'Barlow Condensed',Barlow,sans-serif}
 .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
 .sum div{background:var(--soft);border-radius:10px;padding:10px 12px}
@@ -177,6 +179,16 @@ function actualGain(g){const w=S.log.filter(e=>e.gid===g.id&&e.type==='weigh').s
  for(let i=w.length-1;i>0;i--){const d=days(w[i-1].date,w[i].date);if(d>0)return{v:(w[i].avg-w[i-1].avg)/d,from:w[i-1].date,to:w[i].date}}return null}
 function feedEff(g){if(!g.meal||!g.count)return null;const a=actualGain(g),v=a&&a.v>0?a.v:g.dwg;if(!(v>0))return null;
  const ph=g.meal/g.count/7,fcr=ph/v;return{v,actual:!!(a&&a.v>0),fcr,cost:S.set.price?fcr*S.set.price/1000:0}}
+const facW=()=>S.set.factory||50;
+function readyNow(g){const w=lastOf(g.id,'weigh');if(!w)return{n:0,est:false};const thr=facW();let n=0,est=false;
+ if(w.tally){for(const k in w.tally)if(+k>=thr)n+=w.tally[k]}
+ else if(w.min&&w.max>w.min){const c=w.count||g.count||0;n=Math.round(c*Math.max(0,Math.min(1,(w.max-thr+1)/(w.max-w.min+1))));est=true}
+ else if(w.avg>=thr){n=w.count||g.count||0;est=true}
+ if(!n)est=false;
+ const wi=S.log.indexOf(w);
+ S.log.forEach((e,i)=>{if(e.gid!==g.id||e===w||!(e.date>w.date||(e.date===w.date&&i>wi)))return;
+  if(e.type==='sale')n-=e.n||0;else if(e.type==='move'&&e.ready)n+=e.dir==='in'?(e.n||0):-(e.n||0)});
+ return{n:Math.max(0,Math.min(n,g.count||n)),est}}
 function dueList(){const t=today(),out=[];for(const g of S.groups){const nw=nextW(g);
  if(nw)out.push({d:nw,txt:'Weigh '+g.name,sub:g.avg>=g.target?'Average already at move-on weight':'Should be about '+g.target+' kg by then'});
  if(g.bath&&g.bathEvery>0)out.push({d:addD(g.bath,g.bathEvery),txt:'Footbath '+g.name,sub:'Last done '+fmt(g.bath)});
@@ -192,7 +204,7 @@ function stats(){const lambs=S.groups.reduce((a,g)=>a+(g.count||0),0),meal=S.gro
  const ml=sn!=null?[(sn>=1000?r1(sn/1000)+' t':Math.round(sn)+' kg'),'meal in bin'+(u?' · '+Math.floor(sn/u)+' days left':'')]:[meal>=1000?r1(meal/1000)+' t':meal+' kg','meal per week'];
  $('stats').innerHTML=[[lambs,'lambs on farm'],ml,[sold,'sold in '+yr],[nx?fmt(nx.d):'—',nx?'next: '+esc(nx.txt):'nothing due']].map(([b,t])=>`<div class="stat"><b>${b}</b><span>${t}</span></div>`).join('')}
 const job=x=>{const n=days(today(),x.d);const late=n<0&&!x.wd;return `<li class="${late?'late':''}"><div class="when">${fmt(x.d)}<small>${late?'overdue':rel(n)}</small></div><div><b>${esc(x.txt)}</b><div class="sm mute">${esc(x.sub)}</div></div></li>`};
-function card(g){const e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf(g.id,'dose');
+function card(g){const rn=readyNow(g),e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf(g.id,'dose');
  const pct=g.target&&e?Math.min(100,e/g.target*100):0,ph=g.count&&g.meal?g.meal/g.count/7:0;
  const nb=g.bath&&g.bathEvery>0?addD(g.bath,g.bathEvery):'';
  return `<article class="g"><div class="gh"><span class="tag">${esc(g.name)}</span><span class="cnt">${g.count||0} lambs</span></div>
@@ -200,7 +212,7 @@ function card(g){const e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf
  ${g.min&&g.dwg?`<div class="sm mute" style="margin-top:-6px">Most lambs ~${rangeAt(g,t)} today</div>`:''}
  <div class="bar" title="${Math.round(pct)}% of move-on weight"><i style="width:${pct}%"></i></div>
  ${e&&g.dwg?`<div class="proj">${[7,14,28].map(n=>{const d=addD(t,n);return `<div><span>${n===28?'4 weeks':n/7+(n===7?' week':' weeks')}</span><b>${r1(at(g,d))} kg</b><span>${fmt(d)}</span></div>`}).join('')}</div>`:''}
- ${wd?`<div><span class="chip">In withdrawal until ${fmt(wd.end)}</span></div>`:''}
+ ${wd||rn.n?`<div class="btns">${rn.n?`<span class="chip rdy">${rn.est?'~':''}${rn.n} ready for factory</span>`:''}${wd?`<span class="chip">In withdrawal until ${fmt(wd.end)}</span>`:''}</div>`:''}
  <dl><dt>Last weighed</dt><dd>${g.weighed?fmt(g.weighed)+' · '+(g.min?g.min+'–'+g.max+' kg':kg(g.avg)):'Not yet'}</dd>
  <dt>Daily gain</dt><dd>${g.dwg?Math.round(g.dwg*1000)+' g/day predicted':'Not set'}</dd>
  <dt>Next weigh</dt><dd class="${nw&&nw<=t?'due':''}">${nw?fmt(nw)+' ('+rel(days(t,nw))+')':'Needs weight, gain and target'}</dd>
@@ -208,9 +220,15 @@ function card(g){const e=est(g),nw=nextW(g),t=today(),wd=withdrawal(g),ld=lastOf
  <dt>Last dose</dt><dd>${ld?esc(ld.pname)+' · '+fmt(ld.date):'None recorded'}</dd>
  <dt>Footbath</dt><dd class="${nb&&nb<=t?'due':''}">${g.bath?fmt(g.bath)+(nb?' · next '+fmt(nb):''):'None recorded'}</dd></dl>
  <div class="acts"><button class="btn y" data-a="weigh" data-id="${g.id}">Weigh</button><button class="btn" data-a="dose" data-id="${g.id}">Dose</button><button class="btn" data-a="bath" data-id="${g.id}">Footbath</button><button class="btn" data-a="more" data-id="${g.id}">More</button></div></article>`}
+function readyCard(){const thr=facW(),rs=S.groups.map(g=>({g,...readyNow(g)})).filter(x=>x.n>0),total=rs.reduce((a,x)=>a+x.n,0),anyEst=rs.some(x=>x.est);
+ return `<div class="row"><h2>Ready for factory</h2></div><div class="card${total?' ready':''}">
+ <div class="wt"><div><b class="big">${total}</b> <span>${total===1?'lamb':'lambs'} at ${thr} kg or over</span></div><label class="pd sm">Factory weight <input id="fw" type="number" inputmode="decimal" min="0" step="0.5" value="${thr}" style="width:5.5em"> kg</label></div>
+ ${rs.length?`<ul class="jobs">${rs.map(x=>`<li style="grid-template-columns:minmax(0,1fr) auto;align-items:center"><div><b>${x.est?'About ':''}${x.n} in ${esc(x.g.name)}</b><div class="sm mute">From the weighing on ${fmt(x.g.weighed)}</div></div><div class="btns"><button class="btn y" data-a="sellready" data-id="${x.g.id}">Sell</button><button class="btn" data-a="moveready" data-id="${x.g.id}">Move</button></div></li>`).join('')}</ul>`
+ :'<p class="mute sm" style="margin:6px 0 0">None flagged. After you weigh, any lambs at this weight or over show up here.</p>'}
+ ${anyEst?'<p class="sm mute" style="margin:8px 0 0">"About" numbers are estimated from a weight range. Weigh with Tap to count for exact numbers.</p>':''}</div>`}
 function vFlock(){if(!S.groups.length)return `<div class="card empty" style="margin-top:24px"><h2>No groups yet</h2><p class="mute">Make a group for each weight band, e.g. 30–35 kg, 35–40 kg and 40–45 kg.</p><div class="btns" style="justify-content:center"><button class="btn p" data-a="addg">+ Add your first group</button><button class="btn" data-a="example">Try with example groups</button></div></div>`;
  const t=today(),all=dueList(),soon=all.filter(x=>days(t,x.d)<=14),later=all.filter(x=>days(t,x.d)>14);
- return `<div class="row"><h2>Coming up</h2></div><div class="card">${soon.length?`<ul class="jobs">${soon.map(job).join('')}</ul>`:'<p class="mute" style="margin:0">Nothing due in the next 2 weeks.</p>'}${later.length?`<details><summary>Later (${later.length})</summary><ul class="jobs">${later.map(job).join('')}</ul></details>`:''}</div>
+ return `${readyCard()}<div class="row"><h2>Coming up</h2></div><div class="card">${soon.length?`<ul class="jobs">${soon.map(job).join('')}</ul>`:'<p class="mute" style="margin:0">Nothing due in the next 2 weeks.</p>'}${later.length?`<details><summary>Later (${later.length})</summary><ul class="jobs">${later.map(job).join('')}</ul></details>`:''}</div>
  <div class="row"><h2>Predicted weights</h2></div><div class="card">${predCard()}</div>
  <div class="row"><h2>Groups</h2><div class="btns"><button class="btn" data-a="dose">Dose groups</button><button class="btn" data-a="bath">Footbath groups</button><button class="btn p" data-a="addg">+ Group</button></div></div>
  <div class="grid">${S.groups.map(card).join('')}</div>`}
@@ -258,6 +276,7 @@ function vSales(){const all=S.log.filter(e=>e.type==='sale').sort((a,b)=>a.date<
  :'<div class="card mute">No sales yet. Tap Record sale after lambs go to the factory or mart. You can scan the factory docket to fill in the figures.</div>'}`}
 function render(){stats();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
  $('view').innerHTML=tab==='doses'?vDoses():tab==='sales'?vSales():tab==='more'?vMore():vFlock();
+ const fw=$('fw');if(fw)fw.onchange=()=>{const v=num(fw.value);if(v>0){S.set.factory=v;save()}};
  const sy=$('syr');if(sy)sy.onchange=()=>{saleYr=sy.value;render()};
  document.querySelectorAll('[data-esale]').forEach(x=>x.onclick=()=>{const e=S.log.find(l=>l.id===x.dataset.esale);e&&saleForm(e.gid,e)});
  document.querySelectorAll('[data-ddel]').forEach(x=>arm(x,'Delete?',()=>{const d=S.deliv.find(q=>q.id===x.dataset.ddel);if(!d)return;S.deliv=S.deliv.filter(q=>q!==d);if(S.set.stockDate)S.set.stockKg=Math.max(0,(S.set.stockKg||0)-d.kg);save()}));
@@ -317,11 +336,11 @@ function weighForm(g){const prev=g.weighed?{d:g.weighed,a:g.avg}:null,DK='lambtr
   $('tg').innerHTML=h+`<button type="button" class="tb ext" data-ext="1">+ ${hi+1}</button>`;const n=tot();$('tt').textContent=n?n+(n===1?' lamb':' lambs')+' counted':'None counted yet'};
  const read=()=>{const m=f.m.value,date=f.date.value||today();
   if(m==='t'){const list=[];Object.keys(tally).map(Number).sort((a,b)=>a-b).forEach(k=>{for(let i=0;i<tally[k];i++)list.push(k)});const n=list.length;if(!n)return{avg:0,date};
-   return{n,avg:list.reduce((a,b)=>a+b,0)/n,lo:list[Math.floor(.1*(n-1))],hi:list[Math.ceil(.9*(n-1))],mn:list[0],mx:list[n-1],over:g.target?list.filter(k=>k>=g.target).length:0,date}}
+   return{n,avg:list.reduce((a,b)=>a+b,0)/n,lo:list[Math.floor(.1*(n-1))],hi:list[Math.ceil(.9*(n-1))],mn:list[0],mx:list[n-1],over:g.target?list.filter(k=>k>=g.target).length:0,fac:list.filter(k=>k>=facW()).length,date}}
   let l,h;if(m==='a'){l=h=num(f.av.value)}else{l=num(f.lo.value);h=num(f.hi.value)||l;if(h<l)[l,h]=[h,l]}return{lo:l,hi:h,avg:(l+h)/2,date}};
  const upd=()=>{const m=f.m.value;$('wt').hidden=m!=='t';$('wr').hidden=m!=='r';$('wa').hidden=m!=='a';const r=read();act=0;
   let t=m==='t'?'Tap a weight for each lamb.':'Enter the weights. With a range, the group average is the middle of it.';
-  if(r.avg){t=m==='t'?`<b>${r.n} lambs counted</b>${g.count?` (${g.count} in the group)`:''} · average <b>${kg(r.avg)}</b><br>Lightest ${r.mn} kg, heaviest ${r.mx} kg · most between ${r.lo}–${r.hi} kg${g.target?`<br><b>${r.over}</b> at or over the move-on weight of ${g.target} kg`:''}`:`Group average: <b>${kg(r.avg)}</b>`;
+  if(r.avg){t=m==='t'?`<b>${r.n} lambs counted</b>${g.count?` (${g.count} in the group)`:''} · average <b>${kg(r.avg)}</b><br>Lightest ${r.mn} kg, heaviest ${r.mx} kg · most between ${r.lo}–${r.hi} kg${g.target?`<br><b>${r.over}</b> at or over the move-on weight of ${g.target} kg`:''}${r.fac?`<br><b>${r.fac}</b> at ${facW()} kg or over will be flagged <b>ready for the factory</b>`:''}`:`Group average: <b>${kg(r.avg)}</b>`;
    if(prev&&r.date>prev.d){const d=days(prev.d,r.date);act=(r.avg-prev.a)/d;t+=`<br>Actual gain since ${fmt(prev.d)}: <b>${Math.round(act*1000)} g/day</b>${g.dwg?` (predicted ${Math.round(g.dwg*1000)})`:''}`}
    const gain=(f.upd.checked&&act>0)?act:g.dwg;
    if(g.target&&r.avg>=g.target)t+=`<br>Average is at or above the move-on weight.`;
@@ -338,7 +357,7 @@ function weighForm(g){const prev=g.weighed?{d:g.weighed,a:g.avg}:null,DK='lambtr
  f.onsubmit=e=>{e.preventDefault();const m=f.m.value,r=read();if(!r.avg){toast(m==='t'?'Tap at least one weight':'Enter a weight');return}const c=Math.round(num(f.count.value));if(c)g.count=c;
   if(f.upd.checked&&act>0)g.dwg=Math.round(act*1000)/1000;
   if(m==='t'){addWeigh(g,r.date,r.lo,r.hi,c,r.avg,{...tally});tally={};stack=[];store()}else addWeigh(g,r.date,r.lo,r.hi,c);
-  save();close();const nw=nextW(g);toast(nw?'Saved · next weigh '+fmt(nw):'Weighing saved')}})}
+  save();close();const nw=nextW(g),rn=readyNow(g);toast(rn.n?`Saved · ${rn.est?'about ':''}${rn.n} ready for factory`:nw?'Saved · next weigh '+fmt(nw):'Weighing saved')}})}
 function doseForm(gids){if(!S.products.length){productForm(null,()=>doseForm(gids));toast('Add a dose product first');return}
  sheet('Record a dose',`<form id="df">
  <label class="f">Product<select name="pid">${S.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
@@ -381,17 +400,18 @@ function productForm(p,after){const n=!p;p=p||{kind:'Wormer'};const kinds=['Worm
   if(n)S.products.push(o);save();if(after)after();else{close();toast(n?'Product added':'Saved')}};
  if(!n)arm(b.querySelector('#pdel'),'Tap again to delete',()=>{S.products=S.products.filter(x=>x!==p);save();close();toast('Product deleted')})})}
 
-function moveForm(g){const others=S.groups.filter(x=>x!==g);if(!others.length){toast('Add another group first');return}
+function moveForm(g,preN,ready){const others=S.groups.filter(x=>x!==g);if(!others.length){toast('Add another group first');return}
+ const rn=readyNow(g).n;
  sheet('Move lambs from '+g.name,`<form id="mf">
- <div class="two">${field('How many lambs','n','','type="number" inputmode="numeric" min="1" max="'+(g.count||0)+'" required')}<label class="f">Into group<select name="to">${others.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label></div>
+ <div class="two">${field('How many lambs','n',preN||'','type="number" inputmode="numeric" min="1" max="'+(g.count||0)+'" required')}<label class="f">Into group<select name="to">${others.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label></div>
  ${field('Date','date',today(),'type="date"')}
+ ${rn?`<label class="ck"><input type="checkbox" name="rdy" ${ready?'checked':''}> These are factory-ready lambs (${rn} flagged)</label>`:''}
  <p class="sm mute" style="margin:0">This changes the lamb count in both groups. Weigh the new group again if its average has changed.</p>
  <button class="btn p" type="submit">Move lambs</button></form>`,b=>{const f=b.querySelector('#mf');
- f.onsubmit=e=>{e.preventDefault();const n=Math.round(num(f.n.value)),to=G(f.to.value),d=f.date.value||today();if(!n||!to)return;
+ f.onsubmit=e=>{e.preventDefault();const n=Math.round(num(f.n.value)),to=G(f.to.value),d=f.date.value||today(),rd=!!(f.rdy&&f.rdy.checked);if(!n||!to)return;
   g.count=Math.max(0,(g.count||0)-n);to.count=(to.count||0)+n;
-  S.log.push({id:uid(),gid:g.id,type:'move',date:d,n,other:to.name,dir:'out'},{id:uid(),gid:to.id,type:'move',date:d,n,other:g.name,dir:'in'});
+  S.log.push({id:uid(),gid:g.id,type:'move',date:d,n,other:to.name,dir:'out',ready:rd},{id:uid(),gid:to.id,type:'move',date:d,n,other:g.name,dir:'in',ready:rd});
   save();close();toast(n+' lambs moved to '+to.name)}})}
-
 function line(e){switch(e.type){
  case'weigh':if(e.tally){const k=Object.keys(e.tally).map(Number);return`<b>Weighed</b> · ${e.n} lambs · avg ${e.avg} kg · ${Math.min(...k)}–${Math.max(...k)} kg`}return`<b>Weighed</b> · ${e.min?e.min+'–'+e.max+' kg (avg '+e.avg+')':'avg '+e.avg+' kg'}${e.count?' · '+e.count+' lambs':''}`;
  case'dose':return`<b>Dosed</b> · ${esc(e.pname)}${e.ml?' · '+e.ml+' ml each':''}${e.note?' · '+esc(e.note):''}`;
@@ -428,12 +448,12 @@ function stockForm(){sheet('Count the bin',`<form id="msf">${field('Meal in the 
  <button class="btn p" type="submit">Save</button></form>`,b=>{const f=b.querySelector('#msf');f.onsubmit=e=>{e.preventDefault();S.set.stockKg=num(f.kg.value);S.set.stockDate=today();save();close();toast('Bin count saved')}})}
 function saleCalc(f){const n=num(f.n.value),cw=num(f.cw.value),lw=num(f.lw.value),ppk=num(f.ppk.value),ph=num(f.ph.value),net=num(f.net.value);
  const gross=ppk&&cw?n*cw*ppk:ph?n*ph:0;return{n,cw,lw,ppk,ph,net,gross,income:net||gross,ko:cw&&lw?cw/lw*100:0}}
-function saleForm(gid,old){const o=old||{};if(old)gid=old.gid;const g=gid?G(gid):null,v=k=>o[k]||'';
+function saleForm(gid,old,preN){const o=old||{};if(old)gid=old.gid;const g=gid?G(gid):null,v=k=>o[k]||'';
  sheet(old?'Edit sale':'Record a sale',`<form id="sf">
  <div class="scanbox"><label class="btn y">Scan factory docket<input type="file" id="dk" accept="image/*" hidden></label><div class="sm mute" id="dkm">Take a photo of the docket, flat, well lit and filling the screen. The figures it can read fill in below. Always check them against the docket.</div></div>
  <label class="f">From group<select name="gid"><option value="">No group</option>${S.groups.map(x=>`<option value="${x.id}" ${x.id===gid?'selected':''}>${esc(x.name)} (${x.count||0})</option>`).join('')}</select></label>
  <label class="ck"><input type="checkbox" name="ded" ${!old||o.ded?'checked':''}> Take these lambs off the group's count</label>
- <div class="two">${field('Date','date',o.date||today(),'type="date" required')}${field('Number of lambs','n',v('n'),'type="number" inputmode="numeric" min="1" required')}</div>
+ <div class="two">${field('Date','date',o.date||today(),'type="date" required')}${field('Number of lambs','n',v('n')||preN||'','type="number" inputmode="numeric" min="1" required')}</div>
  <div class="two"><label class="f">Sold to<select name="to">${['Factory','Mart','Private'].map(x=>`<option ${x===o.to?'selected':''}>${x}</option>`).join('')}</select></label>${field('Name','where',v('where'),'placeholder="Factory or mart"')}</div>
  <div class="two">${field('Avg live weight (kg)','lw',old?v('lw'):g&&g.avg?r1(heavy(g)):'',numA)}${field('Avg carcass weight (kg)','cw',v('cw'),numA)}</div>
  <div class="two">${field('Price (€/kg carcass)','ppk',v('ppk'),numA)}${field('or € per lamb','ph',v('ph'),numA)}</div>
@@ -510,7 +530,7 @@ function example(){const t=today(),a=uid(),b=uid(),c=uid(),p1=uid(),p2=uid();
 
 document.addEventListener('click',e=>{const tb=e.target.closest('#tabs button');if(tb){tab=tb.dataset.t;render();scrollTo(0,0);return}
  const b=e.target.closest('[data-a]');if(!b)return;const id=b.dataset.id,g=id?G(id):null,all=S.groups.map(x=>x.id);
- const acts={addg:()=>groupForm(),example,weigh:()=>g&&weighForm(g),dose:()=>{if(!S.groups.length){toast('Add a group first');return}doseForm(g?[g.id]:all)},bath:()=>{if(!S.groups.length){toast('Add a group first');return}bathForm(g?[g.id]:all)},more:()=>g&&groupSheet(g),addp:()=>productForm(),sale:()=>saleForm(g?g.id:''),deliv:deliveryForm,stock:stockForm,editp:()=>{const p=P(id);p&&productForm(p)}};
+ const acts={addg:()=>groupForm(),example,weigh:()=>g&&weighForm(g),dose:()=>{if(!S.groups.length){toast('Add a group first');return}doseForm(g?[g.id]:all)},bath:()=>{if(!S.groups.length){toast('Add a group first');return}bathForm(g?[g.id]:all)},more:()=>g&&groupSheet(g),addp:()=>productForm(),sale:()=>saleForm(g?g.id:''),sellready:()=>g&&saleForm(g.id,null,readyNow(g).n),moveready:()=>g&&moveForm(g,readyNow(g).n,true),deliv:deliveryForm,stock:stockForm,editp:()=>{const p=P(id);p&&productForm(p)}};
  (acts[b.dataset.a]||(()=>{}))()});
 render();
 /* keep the daily figures (meal left, estimated weights, due dates) current while the app stays open */

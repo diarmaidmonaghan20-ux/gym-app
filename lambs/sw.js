@@ -1,5 +1,5 @@
 // Keeps the lamb tracker working with a weak signal in the yard, and checks GitHub for a newer version first.
-const C='lambs-v7';
+const C='lambs-v8';
 const SHELL=['./','index.html','manifest.webmanifest','icon-192.png','apple-touch-icon.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(SHELL.map(u=>new Request(u,{cache:'no-cache'})))));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith('lambs-')&&k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
