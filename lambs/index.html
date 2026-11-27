@@ -75,6 +75,14 @@ summary{cursor:pointer;font-weight:600;padding:10px 0;min-height:44px}
 .pd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .pd input{width:auto}
 .hit td{font-weight:700;color:var(--bar)}
+.tally{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;touch-action:manipulation}
+.tb{min-height:66px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);display:grid;place-items:center;align-content:center;cursor:pointer;font:inherit;padding:4px;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.tb b{font:700 26px/1 'Barlow Condensed',Barlow,sans-serif}.tb span{font-size:15px;font-weight:700;min-height:19px}
+.tb.on{background:var(--tag);color:#1a1a1a;border-color:var(--tag)}
+.tb.ext{color:var(--mute);border-style:dashed;font-weight:600;font-size:14px}
+.tb:active{transform:scale(.95)}
+.tbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tot{font:700 22px/1.1 'Barlow Condensed',Barlow,sans-serif}
 .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
 .sum div{background:var(--soft);border-radius:10px;padding:10px 12px}
 .sum b{display:block;font:700 26px/1.1 'Barlow Condensed',Barlow,sans-serif}.sum span{font-size:13px;color:var(--mute)}
@@ -154,13 +162,13 @@ const est=g=>g.avg?g.avg+(g.dwg||0)*since(g):0;
 const at=(g,d)=>g.avg?g.avg+(g.dwg||0)*Math.max(0,days(g.weighed||today(),d)):0;
 const rangeAt=(g,d)=>{if(!g.min)return '';const k=(g.dwg||0)*Math.max(0,days(g.weighed||today(),d));return r1(g.min+k)+'–'+r1(g.max+k)+' kg'};
 let predDate='';
-const heavy=g=>{const t=g.max||g.avg;return t?t+(g.dwg||0)*since(g):0};
+const heavy=g=>{const t=g.top||g.max||g.avg;return t?t+(g.dwg||0)*since(g):0};
 function nextW(g){if(!g.avg||!g.target)return null;if(g.avg>=g.target)return g.weighed||today();if(!g.dwg)return null;return addD(g.weighed||today(),Math.ceil((g.target-g.avg)/g.dwg))}
 function lastOf(gid,type,pid){let b=null;for(const e of S.log)if(e.gid===gid&&e.type===type&&(!pid||e.pid===pid)&&(!b||e.date>=b.date))b=e;return b}
-function recompute(g){const w=lastOf(g.id,'weigh');g.avg=w?w.avg:0;g.min=w&&w.min||0;g.max=w&&w.max||0;g.weighed=w?w.date:'';const b=lastOf(g.id,'bath');g.bath=b?b.date:''}
+function recompute(g){const w=lastOf(g.id,'weigh');g.avg=w?w.avg:0;g.min=w&&w.min||0;g.max=w&&w.max||0;g.weighed=w?w.date:'';g.top=w&&w.tally?Math.max(...Object.keys(w.tally).map(Number)):0;const b=lastOf(g.id,'bath');g.bath=b?b.date:''}
 function doseMl(p,w){if(!(p.per>0))return p.rate||0;if(!w)return 0;return Math.ceil(w*p.rate/p.per*2)/2}
 function withdrawal(g){let out=null;const t=today();for(const p of S.products){if(!(p.wd>0))continue;const l=lastOf(g.id,'dose',p.id);if(!l)continue;const e=addD(l.date,p.wd);if(e>=t&&(!out||e>out.end))out={end:e,name:p.name}}return out}
-function addWeigh(g,date,lo,hi,count){const e={id:uid(),gid:g.id,type:'weigh',date,avg:r1((lo+hi)/2)};if(hi>lo){e.min=lo;e.max=hi}if(count)e.count=count;S.log.push(e);recompute(g)}
+function addWeigh(g,date,lo,hi,count,avg,tally){const e={id:uid(),gid:g.id,type:'weigh',date,avg:r1(avg||(lo+hi)/2)};if(hi>lo){e.min=lo;e.max=hi}if(count)e.count=count;if(tally){e.tally=tally;e.n=Object.values(tally).reduce((a,b)=>a+b,0)}S.log.push(e);recompute(g)}
 const money=n=>(n||0).toLocaleString('en-IE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const usage=()=>S.groups.reduce((a,g)=>a+(g.meal||0),0)/7;
 function stockNow(){if(!S.set.stockDate)return null;return Math.max(0,(S.set.stockKg||0)-usage()*Math.max(0,days(S.set.stockDate,today())))}
@@ -286,28 +294,51 @@ function groupForm(g){const n=!g;g=g||{bathEvery:28};
   save();close();toast(n?'Group added':'Saved')};
  if(!n)arm(b.querySelector('#gdel'),'Tap again to delete',()=>{S.groups=S.groups.filter(x=>x!==g);S.log=S.log.filter(x=>x.gid!==g.id);save();close();toast('Group deleted')})})}
 
-function weighForm(g){const prev=g.weighed?{d:g.weighed,a:g.avg}:null;
+function weighForm(g){const prev=g.weighed?{d:g.weighed,a:g.avg}:null,DK='lambtracker.tally.'+g.id;
+ let tally={},stack=[];try{const d=JSON.parse(localStorage.getItem(DK)||'null');if(d&&d.t){tally=d.t;stack=d.s||[]}}catch(e){}
+ const tot=()=>Object.values(tally).reduce((a,b)=>a+b,0),drafted=tot(),sh=since(g)*(g.dwg||0);let lo,hi;
+ if(g.min&&g.max){lo=Math.floor(g.min+sh)-2;hi=Math.ceil(g.max+sh)+2}else if(g.avg){const c=Math.round(est(g));lo=c-4;hi=c+4}else if(g.target){lo=Math.round(g.target)-8;hi=Math.round(g.target)+2}else{lo=30;hi=45}
+ const ks=Object.keys(tally).map(Number);if(ks.length){lo=Math.min(lo,...ks);hi=Math.max(hi,...ks)}
  sheet('Weigh '+g.name,`<form id="wf">
- <div class="seg"><label><input type="radio" name="m" value="r" checked>Weight range</label><label><input type="radio" name="m" value="a">Exact average</label></div>
- <div class="two" id="wr">${field('Most are from (kg)','lo','',numA+' required')}${field('to (kg)','hi','',numA)}</div>
+ <div class="seg"><label><input type="radio" name="m" value="t" checked>Tap to count</label><label><input type="radio" name="m" value="r">Range</label><label><input type="radio" name="m" value="a">Average</label></div>
+ <div id="wt"><p class="sm mute" style="margin:0 0 8px">${drafted?`Carrying on from your unsaved count of ${drafted} lambs.`:'Tap the weight of each lamb as it comes off the scales. Each tap counts one lamb.'}</p>
+  <div class="tally" id="tg"></div>
+  <div class="tbar"><span class="tot" id="tt"></span><div class="btns"><button type="button" class="btn" id="tu">Undo last</button><button type="button" class="btn d" id="tc">Clear</button></div></div>
+  <label class="ck"><input type="checkbox" id="tm"> Tapping takes one off (to fix a mistake)</label></div>
+ <div class="two" id="wr" hidden>${field('Most are from (kg)','lo','',numA)}${field('to (kg)','hi','',numA)}</div>
  <div id="wa" hidden>${field('Average weight (kg)','av','',numA)}</div>
  <div class="two">${field('Date weighed','date',today(),'type="date" required')}${field('Lambs in group','count',g.count||'',numA)}</div>
  <div class="prev" id="wp"></div>
  <label class="ck" id="wu" hidden><input type="checkbox" name="upd"> Use the actual gain as the new predicted gain</label>
  <button class="btn p" type="submit">Save weighing</button></form>`,b=>{const f=b.querySelector('#wf');let act=0;
- const read=()=>{let lo,hi;if(f.m.value==='a'){lo=hi=num(f.av.value)}else{lo=num(f.lo.value);hi=num(f.hi.value)||lo;if(hi<lo)[lo,hi]=[hi,lo]}return{lo,hi,avg:(lo+hi)/2,date:f.date.value||today()}};
- const upd=()=>{const a=f.m.value==='a';$('wr').hidden=a;$('wa').hidden=!a;f.lo.required=!a;f.av.required=a;const r=read();act=0;
-  let t='Enter the weights. With a range, the group average is the middle of it.';
-  if(r.avg){t=`Group average: <b>${kg(r.avg)}</b>`;
+ const store=()=>{try{if(tot())localStorage.setItem(DK,JSON.stringify({t:tally,s:stack}));else localStorage.removeItem(DK)}catch(e){}};
+ const grid=()=>{let h=`<button type="button" class="tb ext" data-ext="-1">+ ${lo-1}</button>`;
+  for(let k=lo;k<=hi;k++){const c=tally[k]||0;h+=`<button type="button" class="tb${c?' on':''}" data-k="${k}" aria-label="${k} kg, ${c} counted"><b>${k}</b><span>${c||''}</span></button>`}
+  $('tg').innerHTML=h+`<button type="button" class="tb ext" data-ext="1">+ ${hi+1}</button>`;const n=tot();$('tt').textContent=n?n+(n===1?' lamb':' lambs')+' counted':'None counted yet'};
+ const read=()=>{const m=f.m.value,date=f.date.value||today();
+  if(m==='t'){const list=[];Object.keys(tally).map(Number).sort((a,b)=>a-b).forEach(k=>{for(let i=0;i<tally[k];i++)list.push(k)});const n=list.length;if(!n)return{avg:0,date};
+   return{n,avg:list.reduce((a,b)=>a+b,0)/n,lo:list[Math.floor(.1*(n-1))],hi:list[Math.ceil(.9*(n-1))],mn:list[0],mx:list[n-1],over:g.target?list.filter(k=>k>=g.target).length:0,date}}
+  let l,h;if(m==='a'){l=h=num(f.av.value)}else{l=num(f.lo.value);h=num(f.hi.value)||l;if(h<l)[l,h]=[h,l]}return{lo:l,hi:h,avg:(l+h)/2,date}};
+ const upd=()=>{const m=f.m.value;$('wt').hidden=m!=='t';$('wr').hidden=m!=='r';$('wa').hidden=m!=='a';const r=read();act=0;
+  let t=m==='t'?'Tap a weight for each lamb.':'Enter the weights. With a range, the group average is the middle of it.';
+  if(r.avg){t=m==='t'?`<b>${r.n} lambs counted</b>${g.count?` (${g.count} in the group)`:''} · average <b>${kg(r.avg)}</b><br>Lightest ${r.mn} kg, heaviest ${r.mx} kg · most between ${r.lo}–${r.hi} kg${g.target?`<br><b>${r.over}</b> at or over the move-on weight of ${g.target} kg`:''}`:`Group average: <b>${kg(r.avg)}</b>`;
    if(prev&&r.date>prev.d){const d=days(prev.d,r.date);act=(r.avg-prev.a)/d;t+=`<br>Actual gain since ${fmt(prev.d)}: <b>${Math.round(act*1000)} g/day</b>${g.dwg?` (predicted ${Math.round(g.dwg*1000)})`:''}`}
    const gain=(f.upd.checked&&act>0)?act:g.dwg;
-   if(g.target&&r.avg>=g.target)t+=`<br>At or above the move-on weight of ${g.target} kg.`;
-   else if(g.target&&gain>0)t+=`<br>Should reach ${g.target} kg around <b>${fmt(addD(r.date,Math.ceil((g.target-r.avg)/gain)))}</b>.`}
+   if(g.target&&r.avg>=g.target)t+=`<br>Average is at or above the move-on weight.`;
+   else if(g.target&&gain>0)t+=`<br>Average should reach ${g.target} kg around <b>${fmt(addD(r.date,Math.ceil((g.target-r.avg)/gain)))}</b>.`}
   $('wp').innerHTML=t;$('wu').hidden=!(act>0)};
- f.addEventListener('input',upd);f.addEventListener('change',upd);upd();
- f.onsubmit=e=>{e.preventDefault();const r=read();if(!r.avg)return;const c=Math.round(num(f.count.value));if(c)g.count=c;
-  if(f.upd.checked&&act>0)g.dwg=Math.round(act*1000)/1000;addWeigh(g,r.date,r.lo,r.hi,c);save();close();const nw=nextW(g);toast(nw?'Saved · next weigh '+fmt(nw):'Weighing saved')}})}
-
+ $('tg').addEventListener('click',e=>{const x=e.target.closest('button');if(!x)return;
+  if(x.dataset.ext){if(+x.dataset.ext<0)lo--;else hi++;grid();return}
+  const k=+x.dataset.k;if($('tm').checked){if(tally[k]){tally[k]--;if(!tally[k])delete tally[k];const i=stack.lastIndexOf(k);if(i>=0)stack.splice(i,1)}}
+  else{tally[k]=(tally[k]||0)+1;stack.push(k);try{navigator.vibrate&&navigator.vibrate(12)}catch(err){}}
+  store();grid();upd()});
+ $('tu').onclick=()=>{const k=stack.pop();if(k==null)return;tally[k]--;if(!tally[k])delete tally[k];store();grid();upd()};
+ arm($('tc'),'Tap again to clear',()=>{tally={};stack=[];store();grid();upd();$('tc').textContent='Clear'});
+ f.addEventListener('input',upd);f.addEventListener('change',upd);grid();upd();
+ f.onsubmit=e=>{e.preventDefault();const m=f.m.value,r=read();if(!r.avg){toast(m==='t'?'Tap at least one weight':'Enter a weight');return}const c=Math.round(num(f.count.value));if(c)g.count=c;
+  if(f.upd.checked&&act>0)g.dwg=Math.round(act*1000)/1000;
+  if(m==='t'){addWeigh(g,r.date,r.lo,r.hi,c,r.avg,{...tally});tally={};stack=[];store()}else addWeigh(g,r.date,r.lo,r.hi,c);
+  save();close();const nw=nextW(g);toast(nw?'Saved · next weigh '+fmt(nw):'Weighing saved')}})}
 function doseForm(gids){if(!S.products.length){productForm(null,()=>doseForm(gids));toast('Add a dose product first');return}
  sheet('Record a dose',`<form id="df">
  <label class="f">Product<select name="pid">${S.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
@@ -362,7 +393,7 @@ function moveForm(g){const others=S.groups.filter(x=>x!==g);if(!others.length){t
   save();close();toast(n+' lambs moved to '+to.name)}})}
 
 function line(e){switch(e.type){
- case'weigh':return`<b>Weighed</b> · ${e.min?e.min+'–'+e.max+' kg (avg '+e.avg+')':'avg '+e.avg+' kg'}${e.count?' · '+e.count+' lambs':''}`;
+ case'weigh':if(e.tally){const k=Object.keys(e.tally).map(Number);return`<b>Weighed</b> · ${e.n} lambs · avg ${e.avg} kg · ${Math.min(...k)}–${Math.max(...k)} kg`}return`<b>Weighed</b> · ${e.min?e.min+'–'+e.max+' kg (avg '+e.avg+')':'avg '+e.avg+' kg'}${e.count?' · '+e.count+' lambs':''}`;
  case'dose':return`<b>Dosed</b> · ${esc(e.pname)}${e.ml?' · '+e.ml+' ml each':''}${e.note?' · '+esc(e.note):''}`;
  case'bath':return`<b>Footbathed</b>${e.sol?' · '+esc(e.sol):''}`;
  case'sale':return`<b>Sold</b> · ${e.n} lambs to ${esc(e.where||e.to)}${e.income?' · €'+money(e.income):''}`;
@@ -375,12 +406,12 @@ function forecast(g){if(!g.avg||!g.dwg)return '<p class="sm mute">Weigh the grou
  return `<h3 style="margin:18px 0 4px">Predicted weights</h3><p class="sm mute" style="margin:0 0 6px">At ${Math.round(g.dwg*1000)} g/day from ${fmt(g.weighed)}${g.target?` · move on at ${g.target} kg`:''}</p>
  <div class="scroll"><table><thead><tr><th>Week</th><th class="n">Average</th><th class="n">Most lambs</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`}
 function groupSheet(g){const items=S.log.filter(e=>e.gid===g.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
- sheet(g.name,`<div class="btns"><button class="btn" id="ge">Edit group</button><button class="btn" id="gm">Move lambs</button><button class="btn" id="gs">Record sale</button></div>
+ sheet(g.name,`<div class="btns"><button class="btn y" id="gw">Weigh</button><button class="btn" id="ge">Edit group</button><button class="btn" id="gm">Move lambs</button><button class="btn" id="gs">Record sale</button></div>
  ${g.notes?`<p class="sm">${esc(g.notes)}</p>`:''}
  ${forecast(g)}
  <h3 style="margin:18px 0 4px">History</h3>
  ${items.length?`<ul class="hist">${items.map(e=>`<li><div><div class="sm mute">${fmt(e.date)}</div><div>${line(e)}</div></div>${e.type==='sale'?`<button class="btn" data-hsale="${e.id}">Edit</button>`:`<button class="x" data-del="${e.id}" aria-label="Delete entry">×</button>`}</li>`).join('')}</ul>`:'<p class="mute">Nothing recorded yet.</p>'}`,b=>{
- b.querySelector('#ge').onclick=()=>groupForm(g);b.querySelector('#gm').onclick=()=>moveForm(g);b.querySelector('#gs').onclick=()=>saleForm(g.id);b.querySelectorAll('[data-hsale]').forEach(x=>x.onclick=()=>{const e=S.log.find(l=>l.id===x.dataset.hsale);e&&saleForm(e.gid,e)});
+ b.querySelector('#gw').onclick=()=>weighForm(g);b.querySelector('#ge').onclick=()=>groupForm(g);b.querySelector('#gm').onclick=()=>moveForm(g);b.querySelector('#gs').onclick=()=>saleForm(g.id);b.querySelectorAll('[data-hsale]').forEach(x=>x.onclick=()=>{const e=S.log.find(l=>l.id===x.dataset.hsale);e&&saleForm(e.gid,e)});
  b.querySelectorAll('[data-del]').forEach(x=>arm(x,'Delete?',()=>{const e=S.log.find(l=>l.id===x.dataset.del);S.log=S.log.filter(l=>l!==e);
   if(e&&e.type==='sale'&&e.ded)g.count=(g.count||0)+(e.n||0);
   if(e&&e.type==='move'){const n=e.n||0,o=S.groups.find(q=>q.name===e.other);g.count=Math.max(0,(g.count||0)+(e.dir==='out'?n:-n))}
