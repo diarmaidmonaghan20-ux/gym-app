@@ -249,8 +249,13 @@ async function sync(){if(!SY.url)return;if(syncing){again=true;return}syncing=tr
   if(seq===my)applyRemote(j.state);else again=true;SY.last=Date.now();SY.err=0}
  catch(e){SY.err=1}
  syncing=false;storeSY();syncLabel();if(again){again=false;setTimeout(sync,400)}}
-function rebaseMeal(){if(!S.set.stockDate)return;const u=usage();if(S.set.rate==null){S.set.rate=u;return}
- if(Math.abs(S.set.rate-u)<1e-9)return;const t=today();if(S.set.stockDate<t){S.set.stockKg=Math.max(0,(S.set.stockKg||0)-S.set.rate*days(S.set.stockDate,t));S.set.stockDate=t}S.set.rate=u}
+/* time moves in 6-hour steps: 6am, 12pm, 6pm and midnight */
+const dayIdx=d=>Math.round(ms(d)/864e5);
+const qNow=()=>dayIdx(today())*4+Math.floor(new Date().getHours()/6);
+const qOf=d=>d<today()?dayIdx(d)*4:qNow();
+function hasStock(){if(S.set.stockQ==null&&S.set.stockDate)S.set.stockQ=(dayIdx(S.set.stockDate)+1)*4;return S.set.stockQ!=null}
+function rebaseMeal(){if(!hasStock())return;const u=usage();if(S.set.rate==null){S.set.rate=u;return}
+ if(Math.abs(S.set.rate-u)<1e-9)return;const q=qNow();if(S.set.stockQ<q){S.set.stockKg=Math.max(0,(S.set.stockKg||0)-S.set.rate*(q-S.set.stockQ)/4);S.set.stockQ=q}S.set.rate=u}
 function save(){rebaseMeal();stamp();S.updated=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save. Is the phone storage full?')}
  seq++;pending=null;render();syncLabel();if(SY.url){clearTimeout(stT);stT=setTimeout(sync,1200)}}
 takeSnap();
@@ -258,7 +263,7 @@ try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(()=>{});
 
 /* ---------- maths ---------- */
-const since=g=>g.weighed?Math.max(0,days(g.weighed,today())):0;
+const since=g=>g.weighed?Math.max(0,(qNow()-(dayIdx(g.weighed)*4+2))/4):0;
 const est=g=>g.avg?g.avg+(g.dwg||0)*since(g):0;
 const at=(g,d)=>g.avg?g.avg+(g.dwg||0)*Math.max(0,days(g.weighed||today(),d)):0;
 const rangeAt=(g,d)=>{if(!g.min)return '';const k=(g.dwg||0)*Math.max(0,days(g.weighed||today(),d));return r1(g.min+k)+'–'+r1(g.max+k)+' kg'};
@@ -274,7 +279,7 @@ const money=n=>(n||0).toLocaleString('en-IE',{minimumFractionDigits:2,maximumFra
 const usage=()=>S.groups.reduce((a,g)=>a+(g.meal||0),0)/7;
 const baseDate=()=>S.set.baseDate||(S.deliv||[]).reduce((a,d)=>d.date>a?d.date:a,'')||S.set.stockDate||today();
 const rate=()=>S.set.rate!=null?S.set.rate:usage();
-function stockNow(){if(!S.set.stockDate)return null;return Math.max(0,(S.set.stockKg||0)-rate()*Math.max(0,days(S.set.stockDate,today())))}
+function stockNow(){if(!hasStock())return null;return Math.max(0,(S.set.stockKg||0)-rate()*Math.max(0,qNow()-S.set.stockQ)/4)}
 function runOut(){const sn=stockNow(),u=usage();if(sn==null||!u)return null;return addD(today(),Math.floor(sn/u))}
 function actualGain(g){const w=S.log.filter(e=>e.gid===g.id&&e.type==='weigh').sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
  for(let i=w.length-1;i>0;i--){const d=days(w[i-1].date,w[i].date);if(d>0)return{v:(w[i].avg-w[i-1].avg)/d,from:w[i-1].date,to:w[i].date}}return null}
@@ -352,7 +357,7 @@ function vMore(){const pr=S.set.price||0,u=usage(),sn=stockNow(),ro=runOut(),lea
  return `<div class="row"><h2>Meal in the bin</h2><div class="btns"><button class="btn p" data-a="deliv">+ Delivery</button><button class="btn" data-a="stock">Count bin</button></div></div>
  <div class="card">${sn==null?'<p class="mute" style="margin:0">Tap Count bin and put in how much meal you have now. The app then counts it down each day using every group\'s meal per week, and reminds you to order.</p>'
  :`<div class="wt"><div><b class="big">${Math.round(sn).toLocaleString('en-IE')}</b> <span>kg left (estimate)</span></div><div class="mute">${u?`${Math.floor(sn/u)} days at ${Math.round(u)} kg/day`:'No meal set on any group'}</div></div>
- ${ro?`<p style="margin:8px 0 0">Runs out around <b>${fmt(ro)}</b>. Order by <b>${fmt(addD(ro,-lead))}</b>.</p>`:''}<p class="sm mute" style="margin:6px 0 0">Last counted or topped up ${fmt(S.set.stockDate)}. Tap Count bin any time to correct it.</p>`}
+ ${ro?`<p style="margin:8px 0 0">Runs out around <b>${fmt(ro)}</b>. Order by <b>${fmt(addD(ro,-lead))}</b>.</p>`:''}<p class="sm mute" style="margin:6px 0 0">Last counted or topped up ${fmt(baseDate())}. It goes down every 6 hours. Tap Count bin any time to correct it.</p>`}
  <label class="f" style="max-width:300px;margin-top:12px">Remind me to order (days before it runs out)<input id="lead" type="number" inputmode="numeric" min="0" value="${lead}"></label>
  ${dl.length?`<h3 style="margin:16px 0 4px">Deliveries</h3><ul class="hist">${dl.map(d=>`<li><div><div class="sm mute">${fmt(d.date)}</div><div><b>${d.kg.toLocaleString('en-IE')} kg</b>${d.price?' · €'+d.price+'/t':''}</div></div><button class="x" data-ddel="${d.id}" aria-label="Delete delivery">×</button></li>`).join('')}</ul>`:''}</div>
  <div class="row"><h2>Meal use and cost per kg gained</h2></div><div class="card">
@@ -388,7 +393,7 @@ function render(){stats();document.querySelectorAll('#tabs button').forEach(b=>b
  const fw=$('fw');if(fw)fw.onchange=()=>{const v=num(fw.value);if(v>0){S.set.factory=v;save()}};
  const sy=$('syr');if(sy)sy.onchange=()=>{saleYr=sy.value;render()};
  document.querySelectorAll('[data-esale]').forEach(x=>x.onclick=()=>{const e=S.log.find(l=>l.id===x.dataset.esale);e&&saleForm(e.gid,e)});
- document.querySelectorAll('[data-ddel]').forEach(x=>arm(x,'Delete?',()=>{const d=S.deliv.find(q=>q.id===x.dataset.ddel);if(!d)return;S.deliv=S.deliv.filter(q=>q!==d);if(S.set.stockDate)S.set.stockKg=Math.max(0,(S.set.stockKg||0)-d.kg);save()}));
+ document.querySelectorAll('[data-ddel]').forEach(x=>arm(x,'Delete?',()=>{const d=S.deliv.find(q=>q.id===x.dataset.ddel);if(!d)return;S.deliv=S.deliv.filter(q=>q!==d);if(hasStock())S.set.stockKg=Math.max(0,(S.set.stockKg||0)-d.kg);save()}));
  const ld=$('lead');if(ld)ld.onchange=()=>{S.set.lead=Math.round(num(ld.value));save()};
  const pdi=$('pdate');if(pdi)pdi.onchange=()=>{if(pdi.value){predDate=pdi.value;const y=scrollY;render();scrollTo(0,y)}};
  if(tab==='more'){$('price').onchange=e=>{S.set.price=num(e.target.value);save()};
@@ -422,7 +427,7 @@ const gchecks=sel=>`<fieldset><legend>Groups</legend>${S.groups.map(g=>`<label c
 const field=(label,name,val,extra='')=>`<label class="f">${label}<input name="${name}" value="${esc(val??'')}" ${extra}></label>`;
 const numA='type="number" inputmode="decimal" min="0" step="any"';
 
-function groupForm(g){const n=!g;g=g||{bathEvery:28};const bd=baseDate(),track=!!S.set.stockDate;
+function groupForm(g){const n=!g;g=g||{bathEvery:28};const bd=baseDate(),track=hasStock();
  sheet(n?'Add group':'Edit group',`<form id="gf">
  ${field('Group name','name',g.name,'required placeholder="e.g. 40–45 kg"')}
  <div class="two">${field('Number of lambs','count',g.count,numA)}${field('Move on at (kg)','target',g.target||'',numA+' placeholder="e.g. 45"')}</div>
@@ -435,7 +440,7 @@ function groupForm(g){const n=!g;g=g||{bathEvery:28};const bd=baseDate(),track=!
  <div class="btns"><button class="btn p" type="submit">${n?'Add group':'Save changes'}</button>${n?'':'<button class="btn d" type="button" id="gdel">Delete group</button>'}</div></form>`,b=>{
  b.querySelector('#gf').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target),o=n?{id:uid()}:g,oldMeal=n?0:(g.meal||0);if(track)rebaseMeal();
   o.name=String(f.get('name')).trim()||'Group';o.count=Math.round(num(f.get('count')));o.target=num(f.get('target'));o.dwg=num(f.get('dwg'))/1000;o.meal=num(f.get('meal'));o.bathEvery=Math.round(num(f.get('bathEvery')));o.notes=f.get('notes');
-  if(track&&o.meal!==oldMeal){const d=[String(f.get('msince')||today()),bd].sort()[1],dd=d<today()?days(d,today())+1:0;if(dd>0)S.set.stockKg=Math.max(0,(S.set.stockKg||0)-(o.meal-oldMeal)/7*dd)}
+  if(track&&o.meal!==oldMeal){const d=[String(f.get('msince')||today()),bd].sort()[1],qd=d<today()?qNow()-dayIdx(d)*4:0;if(qd>0)S.set.stockKg=Math.max(0,(S.set.stockKg||0)-(o.meal-oldMeal)/7*qd/4)}
   if(n){S.groups.push(o);recompute(o);let lo=num(f.get('lo')),hi=num(f.get('hi'))||lo;if(!lo)lo=hi;if(lo)addWeigh(o,f.get('wdate')||today(),Math.min(lo,hi),Math.max(lo,hi))}
   save();close();toast(n?'Group added':'Saved')};
  if(!n)arm(b.querySelector('#gdel'),'Tap again to delete',()=>{S.groups=S.groups.filter(x=>x!==g);S.log=S.log.filter(x=>x.gid!==g.id);save();close();toast('Group deleted')})})}
@@ -565,22 +570,21 @@ function groupSheet(g){const items=S.log.filter(e=>e.gid===g.id).sort((a,b)=>a.d
   recompute(g);save();groupSheet(g)}))})}
 
 function delSale(id){const e=S.log.find(l=>l.id===id);if(!e)return;S.log=S.log.filter(l=>l!==e);const g=G(e.gid);if(g&&e.ded)g.count=(g.count||0)+(e.n||0);save();toast('Sale deleted')}
-const startOf=d=>d<today()?addD(d,-1):d;
-const stockAt=d=>S.set.stockDate?Math.max(0,(S.set.stockKg||0)-rate()*days(S.set.stockDate,d)):null;
+const stockAtQ=q=>hasStock()?Math.max(0,(S.set.stockKg||0)-rate()*(q-S.set.stockQ)/4):null;
 function deliveryForm(){sheet('Meal delivery',`<form id="mdf">${field('Date delivered','date',today(),'type="date" max="'+today()+'"')}
  <div class="two">${field('Amount (kg) <small>1 tonne = 1,000 kg</small>','kg','',numA+' required placeholder="e.g. 2000"')}${field('Price (€ per tonne)','price',S.set.price||'',numA)}</div>
  <p class="sm mute" style="margin:0" id="mdn"></p>
  <button class="btn p" type="submit">Add delivery</button></form>`,b=>{const f=b.querySelector('#mdf');
- const note=()=>{const d=f.date.value||today(),sa=stockAt(d);$('mdn').textContent=sa==null?'The bin starts from this delivery, and the meal is counted down from the date delivered.'
-  :d<S.set.stockDate?`Your last bin count was on ${fmt(S.set.stockDate)}, after this delivery. It will be added on top of that count. If the count already included it, use Count bin instead.`
-  :`Added to what was in the bin on ${fmt(d)} (about ${Math.round(stockAt(startOf(d))).toLocaleString('en-IE')} kg), then counted down from that day, including it.`};
+ const note=()=>{const d=f.date.value||today(),q=qOf(d),sa=stockAtQ(q);$('mdn').textContent=sa==null?'The bin starts from this delivery. The meal is counted down from the date delivered, every 6 hours.'
+  :q<S.set.stockQ?`Your last bin count was on ${fmt(baseDate())}, after this delivery. It will be added on top of that count. If the count already included it, use Count bin instead.`
+  :`Added to what was in the bin ${d<today()?'at the start of '+fmt(d):'now'} (about ${Math.round(sa).toLocaleString('en-IE')} kg), then counted down every 6 hours.`};
  f.addEventListener('input',note);f.addEventListener('change',note);note();
  f.onsubmit=e=>{e.preventDefault();const k=num(f.kg.value);if(!k)return;const d=f.date.value||today(),pr=num(f.price.value);if(pr)S.set.price=pr;
-  const sd=startOf(d);if(!S.set.stockDate){S.set.stockKg=k;S.set.stockDate=sd}else if(sd>=S.set.stockDate){S.set.stockKg=stockAt(sd)+k;S.set.stockDate=sd}else S.set.stockKg=(S.set.stockKg||0)+k;
+  const q=qOf(d);if(!hasStock()){S.set.stockKg=k;S.set.stockQ=q}else if(q>=S.set.stockQ){S.set.stockKg=stockAtQ(q)+k;S.set.stockQ=q}else S.set.stockKg=(S.set.stockKg||0)+k;
   S.set.rate=usage();if(d>=(S.set.baseDate||''))S.set.baseDate=d;S.deliv=S.deliv||[];S.deliv.push({id:uid(),date:d,kg:k,price:pr});save();close();toast(`Delivery added · about ${Math.round(stockNow()).toLocaleString('en-IE')} kg in the bin now`)}})}
 function stockForm(){sheet('Count the bin',`<form id="msf"><div class="two">${field('Meal in the bin (kg)','kg',stockNow()!=null?Math.round(stockNow()):'',numA+' required')}${field('Counted on','date',today(),'type="date" max="'+today()+'"')}</div>
- <p class="sm mute" style="margin:0">Your best guess is fine. For a past date, that day's feeding counts too. From then on the app takes off each group's daily meal and reminds you ${S.set.lead||7} days before it runs out.</p>
- <button class="btn p" type="submit">Save</button></form>`,b=>{const f=b.querySelector('#msf');f.onsubmit=e=>{e.preventDefault();S.set.stockKg=num(f.kg.value);S.set.baseDate=f.date.value||today();S.set.stockDate=startOf(S.set.baseDate);S.set.rate=usage();save();close();toast(`Saved · about ${Math.round(stockNow()).toLocaleString('en-IE')} kg in the bin now`)}})}
+ <p class="sm mute" style="margin:0">Your best guess is fine. For a past date, it counts from the start of that day. The app takes off a quarter of each group's daily meal every 6 hours (6am, 12pm, 6pm and midnight) and reminds you ${S.set.lead||7} days before it runs out.</p>
+ <button class="btn p" type="submit">Save</button></form>`,b=>{const f=b.querySelector('#msf');f.onsubmit=e=>{e.preventDefault();S.set.stockKg=num(f.kg.value);S.set.baseDate=f.date.value||today();S.set.stockQ=qOf(S.set.baseDate);S.set.rate=usage();save();close();toast(`Saved · about ${Math.round(stockNow()).toLocaleString('en-IE')} kg in the bin now`)}})}
 function saleCalc(f){const n=num(f.n.value),cw=num(f.cw.value),lw=num(f.lw.value),ppk=num(f.ppk.value),ph=num(f.ph.value),net=num(f.net.value);
  const gross=ppk&&cw?n*cw*ppk:ph?n*ph:0;return{n,cw,lw,ppk,ph,net,gross,income:net||gross,ko:cw&&lw?cw/lw*100:0}}
 function saleForm(gid,old,preN){const o=old||{};if(old)gid=old.gid;const g=gid?G(gid):null,v=k=>o[k]||'';
@@ -669,11 +673,11 @@ document.addEventListener('click',e=>{const tb=e.target.closest('#tabs button');
  (acts[b.dataset.a]||(()=>{}))()});
 render();
 /* keep the daily figures (meal left, estimated weights, due dates) current while the app stays open */
-let lastDay=today();
-const refresh=()=>{if(SY.url)sync();if(!$('ov').hidden)return;lastDay=today();const y=scrollY;render();scrollTo(0,y)};
+let lastQ=qNow();
+const refresh=()=>{if(SY.url)sync();if(!$('ov').hidden)return;lastQ=qNow();const y=scrollY;render();scrollTo(0,y)};
 setInterval(()=>{if(SY.url&&!document.hidden&&$('ov').hidden)sync()},45000);
 syncLabel();if(SY.url)sync();
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
 addEventListener('pageshow',refresh);
-setInterval(()=>{if(today()!==lastDay)refresh()},60000);
+setInterval(()=>{if(qNow()!==lastQ)refresh()},60000);
 }</script></body></html>
