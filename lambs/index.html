@@ -249,7 +249,9 @@ async function sync(){if(!SY.url)return;if(syncing){again=true;return}syncing=tr
   if(seq===my)applyRemote(j.state);else again=true;SY.last=Date.now();SY.err=0}
  catch(e){SY.err=1}
  syncing=false;storeSY();syncLabel();if(again){again=false;setTimeout(sync,400)}}
-function save(){stamp();S.updated=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save. Is the phone storage full?')}
+function rebaseMeal(){if(!S.set.stockDate)return;const u=usage();if(S.set.rate==null){S.set.rate=u;return}
+ if(Math.abs(S.set.rate-u)<1e-9)return;const t=today();if(S.set.stockDate<t){S.set.stockKg=Math.max(0,(S.set.stockKg||0)-S.set.rate*days(S.set.stockDate,t));S.set.stockDate=t}S.set.rate=u}
+function save(){rebaseMeal();stamp();S.updated=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save. Is the phone storage full?')}
  seq++;pending=null;render();syncLabel();if(SY.url){clearTimeout(stT);stT=setTimeout(sync,1200)}}
 takeSnap();
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
@@ -270,7 +272,8 @@ function withdrawal(g){let out=null;const t=today();for(const p of S.products){i
 function addWeigh(g,date,lo,hi,count,avg,tally){const e={id:uid(),gid:g.id,type:'weigh',date,avg:r1(avg||(lo+hi)/2)};if(hi>lo){e.min=lo;e.max=hi}if(count)e.count=count;if(tally){e.tally=tally;e.n=Object.values(tally).reduce((a,b)=>a+b,0)}S.log.push(e);recompute(g)}
 const money=n=>(n||0).toLocaleString('en-IE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const usage=()=>S.groups.reduce((a,g)=>a+(g.meal||0),0)/7;
-function stockNow(){if(!S.set.stockDate)return null;return Math.max(0,(S.set.stockKg||0)-usage()*Math.max(0,days(S.set.stockDate,today())))}
+const rate=()=>S.set.rate!=null?S.set.rate:usage();
+function stockNow(){if(!S.set.stockDate)return null;return Math.max(0,(S.set.stockKg||0)-rate()*Math.max(0,days(S.set.stockDate,today())))}
 function runOut(){const sn=stockNow(),u=usage();if(sn==null||!u)return null;return addD(today(),Math.floor(sn/u))}
 function actualGain(g){const w=S.log.filter(e=>e.gid===g.id&&e.type==='weigh').sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
  for(let i=w.length-1;i>0;i--){const d=days(w[i-1].date,w[i].date);if(d>0)return{v:(w[i].avg-w[i-1].avg)/d,from:w[i-1].date,to:w[i].date}}return null}
@@ -558,7 +561,7 @@ function groupSheet(g){const items=S.log.filter(e=>e.gid===g.id).sort((a,b)=>a.d
   recompute(g);save();groupSheet(g)}))})}
 
 function delSale(id){const e=S.log.find(l=>l.id===id);if(!e)return;S.log=S.log.filter(l=>l!==e);const g=G(e.gid);if(g&&e.ded)g.count=(g.count||0)+(e.n||0);save();toast('Sale deleted')}
-const stockAt=d=>S.set.stockDate?Math.max(0,(S.set.stockKg||0)-usage()*days(S.set.stockDate,d)):null;
+const stockAt=d=>S.set.stockDate?Math.max(0,(S.set.stockKg||0)-rate()*days(S.set.stockDate,d)):null;
 function deliveryForm(){sheet('Meal delivery',`<form id="mdf">${field('Date delivered','date',today(),'type="date" max="'+today()+'"')}
  <div class="two">${field('Amount (kg) <small>1 tonne = 1,000 kg</small>','kg','',numA+' required placeholder="e.g. 2000"')}${field('Price (€ per tonne)','price',S.set.price||'',numA)}</div>
  <p class="sm mute" style="margin:0" id="mdn"></p>
@@ -569,10 +572,10 @@ function deliveryForm(){sheet('Meal delivery',`<form id="mdf">${field('Date deli
  f.addEventListener('input',note);f.addEventListener('change',note);note();
  f.onsubmit=e=>{e.preventDefault();const k=num(f.kg.value);if(!k)return;const d=f.date.value||today(),pr=num(f.price.value);if(pr)S.set.price=pr;
   if(!S.set.stockDate){S.set.stockKg=k;S.set.stockDate=d}else if(d>=S.set.stockDate){S.set.stockKg=stockAt(d)+k;S.set.stockDate=d}else S.set.stockKg=(S.set.stockKg||0)+k;
-  S.deliv=S.deliv||[];S.deliv.push({id:uid(),date:d,kg:k,price:pr});save();close();toast(`Delivery added · about ${Math.round(stockNow()).toLocaleString('en-IE')} kg in the bin now`)}})}
+  S.set.rate=usage();S.deliv=S.deliv||[];S.deliv.push({id:uid(),date:d,kg:k,price:pr});save();close();toast(`Delivery added · about ${Math.round(stockNow()).toLocaleString('en-IE')} kg in the bin now`)}})}
 function stockForm(){sheet('Count the bin',`<form id="msf"><div class="two">${field('Meal in the bin (kg)','kg',stockNow()!=null?Math.round(stockNow()):'',numA+' required')}${field('Counted on','date',today(),'type="date" max="'+today()+'"')}</div>
  <p class="sm mute" style="margin:0">Your best guess is fine. From that date the app takes off each group's daily meal and reminds you ${S.set.lead||7} days before it runs out.</p>
- <button class="btn p" type="submit">Save</button></form>`,b=>{const f=b.querySelector('#msf');f.onsubmit=e=>{e.preventDefault();S.set.stockKg=num(f.kg.value);S.set.stockDate=f.date.value||today();save();close();toast(`Saved · about ${Math.round(stockNow()).toLocaleString('en-IE')} kg in the bin now`)}})}
+ <button class="btn p" type="submit">Save</button></form>`,b=>{const f=b.querySelector('#msf');f.onsubmit=e=>{e.preventDefault();S.set.stockKg=num(f.kg.value);S.set.stockDate=f.date.value||today();S.set.rate=usage();save();close();toast(`Saved · about ${Math.round(stockNow()).toLocaleString('en-IE')} kg in the bin now`)}})}
 function saleCalc(f){const n=num(f.n.value),cw=num(f.cw.value),lw=num(f.lw.value),ppk=num(f.ppk.value),ph=num(f.ph.value),net=num(f.net.value);
  const gross=ppk&&cw?n*cw*ppk:ph?n*ph:0;return{n,cw,lw,ppk,ph,net,gross,income:net||gross,ko:cw&&lw?cw/lw*100:0}}
 function saleForm(gid,old,preN){const o=old||{};if(old)gid=old.gid;const g=gid?G(gid):null,v=k=>o[k]||'';
