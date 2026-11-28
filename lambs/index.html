@@ -558,14 +558,21 @@ function groupSheet(g){const items=S.log.filter(e=>e.gid===g.id).sort((a,b)=>a.d
   recompute(g);save();groupSheet(g)}))})}
 
 function delSale(id){const e=S.log.find(l=>l.id===id);if(!e)return;S.log=S.log.filter(l=>l!==e);const g=G(e.gid);if(g&&e.ded)g.count=(g.count||0)+(e.n||0);save();toast('Sale deleted')}
-function deliveryForm(){sheet('Meal delivery',`<form id="mdf">${field('Date','date',today(),'type="date"')}
+const stockAt=d=>S.set.stockDate?Math.max(0,(S.set.stockKg||0)-usage()*days(S.set.stockDate,d)):null;
+function deliveryForm(){sheet('Meal delivery',`<form id="mdf">${field('Date delivered','date',today(),'type="date" max="'+today()+'"')}
  <div class="two">${field('Amount (kg) <small>1 tonne = 1,000 kg</small>','kg','',numA+' required placeholder="e.g. 2000"')}${field('Price (€ per tonne)','price',S.set.price||'',numA)}</div>
- <p class="sm mute" style="margin:0">This is added to what's in the bin now${stockNow()!=null?` (about ${Math.round(stockNow())} kg)`:''}.</p>
- <button class="btn p" type="submit">Add delivery</button></form>`,b=>{const f=b.querySelector('#mdf');f.onsubmit=e=>{e.preventDefault();const k=num(f.kg.value);if(!k)return;
- const pr=num(f.price.value);if(pr)S.set.price=pr;S.set.stockKg=(stockNow()||0)+k;S.set.stockDate=today();S.deliv=S.deliv||[];S.deliv.push({id:uid(),date:f.date.value||today(),kg:k,price:pr});save();close();toast('Delivery added')}})}
-function stockForm(){sheet('Count the bin',`<form id="msf">${field('Meal in the bin now (kg)','kg',stockNow()!=null?Math.round(stockNow()):'',numA+' required')}
- <p class="sm mute" style="margin:0">Your best guess is fine. From today the app takes off each group's daily meal and reminds you ${S.set.lead||7} days before it runs out.</p>
- <button class="btn p" type="submit">Save</button></form>`,b=>{const f=b.querySelector('#msf');f.onsubmit=e=>{e.preventDefault();S.set.stockKg=num(f.kg.value);S.set.stockDate=today();save();close();toast('Bin count saved')}})}
+ <p class="sm mute" style="margin:0" id="mdn"></p>
+ <button class="btn p" type="submit">Add delivery</button></form>`,b=>{const f=b.querySelector('#mdf');
+ const note=()=>{const d=f.date.value||today(),sa=stockAt(d);$('mdn').textContent=sa==null?'The bin starts from this delivery, and the meal is counted down from the date delivered.'
+  :d<S.set.stockDate?`Your last bin count was on ${fmt(S.set.stockDate)}, after this delivery. It will be added on top of that count. If the count already included it, use Count bin instead.`
+  :`Added to what was in the bin on ${fmt(d)} (about ${Math.round(sa).toLocaleString('en-IE')} kg), then counted down from that date.`};
+ f.addEventListener('input',note);f.addEventListener('change',note);note();
+ f.onsubmit=e=>{e.preventDefault();const k=num(f.kg.value);if(!k)return;const d=f.date.value||today(),pr=num(f.price.value);if(pr)S.set.price=pr;
+  if(!S.set.stockDate){S.set.stockKg=k;S.set.stockDate=d}else if(d>=S.set.stockDate){S.set.stockKg=stockAt(d)+k;S.set.stockDate=d}else S.set.stockKg=(S.set.stockKg||0)+k;
+  S.deliv=S.deliv||[];S.deliv.push({id:uid(),date:d,kg:k,price:pr});save();close();toast(`Delivery added · about ${Math.round(stockNow()).toLocaleString('en-IE')} kg in the bin now`)}})}
+function stockForm(){sheet('Count the bin',`<form id="msf"><div class="two">${field('Meal in the bin (kg)','kg',stockNow()!=null?Math.round(stockNow()):'',numA+' required')}${field('Counted on','date',today(),'type="date" max="'+today()+'"')}</div>
+ <p class="sm mute" style="margin:0">Your best guess is fine. From that date the app takes off each group's daily meal and reminds you ${S.set.lead||7} days before it runs out.</p>
+ <button class="btn p" type="submit">Save</button></form>`,b=>{const f=b.querySelector('#msf');f.onsubmit=e=>{e.preventDefault();S.set.stockKg=num(f.kg.value);S.set.stockDate=f.date.value||today();save();close();toast(`Saved · about ${Math.round(stockNow()).toLocaleString('en-IE')} kg in the bin now`)}})}
 function saleCalc(f){const n=num(f.n.value),cw=num(f.cw.value),lw=num(f.lw.value),ppk=num(f.ppk.value),ph=num(f.ph.value),net=num(f.net.value);
  const gross=ppk&&cw?n*cw*ppk:ph?n*ph:0;return{n,cw,lw,ppk,ph,net,gross,income:net||gross,ko:cw&&lw?cw/lw*100:0}}
 function saleForm(gid,old,preN){const o=old||{};if(old)gid=old.gid;const g=gid?G(gid):null,v=k=>o[k]||'';
